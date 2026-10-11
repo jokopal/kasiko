@@ -16,7 +16,7 @@ Aplikasi web progresif (PWA) untuk mencatat pemasukan (kasir) dan pengeluaran us
 lalu menyajikan rekap profit dan analisis untuk owner.
 
 - **Satu owner, banyak usaha.** Owner bisa punya beberapa usaha dan berpindah di antaranya.
-- **Usaha pertama: Saimara** — usaha cuci mobil. (Nama repo `seimara`; nama usaha ditulis **Saimara**.)
+- **Usaha pertama: Saimara** — usaha cuci mobil. (Nama repo `kasiko`; nama usaha ditulis **Saimara**.)
 - **Dua peran:** `kasir` dan `owner`.
 - Dipakai di HP, tablet, dan laptop; bisa di-install sebagai aplikasi (PWA).
 
