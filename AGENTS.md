@@ -41,20 +41,36 @@ Rumus inti: **Profit = Pemasukan − Pengeluaran** (transaksi/pengeluaran yang d
 | 11 | Koreksi | Tidak ada hapus permanen. Kasir bisa **membatalkan** transaksi/pengeluaran **hari yang sama** dengan alasan wajib; owner bisa membatalkan kapan saja dan melihat daftar pembatalan. |
 | 12 | Data kendaraan | **Plat nomor opsional** per transaksi, tampil di nota. Tidak menyimpan data pelanggan. Nomor WhatsApp hanya dipakai untuk membuka link kirim, **tidak disimpan**. |
 
+### Keputusan tambahan — 2026-10-12 (owner menyetujui hasil analisis gap)
+
+| # | Topik | Keputusan |
+|---|-------|-----------|
+| 13 | Stack & UI | Stack bagian 3 **dikonfirmasi**. UI memakai **shadcn/ui** (base Radix, preset Nova) di `src/components/ui` — kode vendor, diperbarui lewat `shadcn add`. Kode aplikasi ditulis sendiri; **tanpa template admin/boilerplate**. `radix-ui` dipin versi persis. |
+| 14 | Sinkron kasir | Bukan `upsert` tabel (bentrok dengan larangan `update` untuk kasir & tidak atomik). Pakai RPC **`create_transaction(jsonb)`** / **`create_expense(jsonb)`**: header + item dalam satu transaksi DB, `ON CONFLICT (id) DO NOTHING`, mengembalikan baris yang ada → idempoten. |
+| 15 | Validasi server | Server menghitung ulang `line_total = price_snapshot × qty`, `total = Σ line_total`, kembalian tunai, dan konsistensi kolom per metode. **Harga snapshot dari client diterima** (katalog offline bisa basi) — tidak ditolak karena beda dengan harga katalog terkini. |
+| 16 | Perangkat & nota | Tabel **`devices`**: `device_code` (1–2 huruf) **dibagikan server** saat registrasi (login pertama, online), unik per usaha, **tidak pernah dipakai ulang**. Data browser terhapus → registrasi ulang dengan kode baru, sehingga nomor nota tidak pernah bentrok. |
+| 17 | Waktu | `occurred_at` dari perangkat + kolom **`received_at`** (diisi server). Selisih di atas ambang (ditetapkan di milestone 1) ditandai untuk ditinjau owner. |
+| 18 | Batal offline | Aturan "hari yang sama" dinilai dari **waktu permintaan batal di perangkat** (`voided_at`), bukan waktu sinkron, dengan batas toleransi di server. |
+| 19 | Integritas multi-usaha | Referensi kategori memakai **FK komposit `(business_id, id)`** agar tidak bisa menunjuk data usaha lain. Kasir membaca branding lewat **view/kolom khusus** (tanpa `opening_cash`). |
+| 20 | Outbox aman | Minta `navigator.storage.persist()`; **logout diblokir** selama outbox belum kosong; jumlah antrean selalu terlihat. |
+| 21 | Audit | Tabel **`audit_log`** untuk perubahan harga/katalog/pengaturan dan pembatalan owner (milestone 1). |
+| 22 | Akun | Pendaftaran publik **dimatikan** (`enable_signup = false`, password ≥ 8 huruf+angka). Owner pertama dibuat lewat skrip *bootstrap*. Reset/nonaktif akun kasir mencabut semua sesi. |
+| 23 | Mode pratinjau | Selama database belum dibuat, `src/features/preview/` menjadi pengganti data sementara (localStorage, sinkron antar-tab) dengan bentuk data yang sama. Validasi memakai fungsi murni yang sama dengan yang akan dipakai RPC. **Dihapus saat lapisan Supabase dibangun.** |
+
 ---
 
 ## 3. Stack Teknis
 
-> Rekomendasi agent, belum dikonfirmasi eksplisit oleh owner (lihat Pertanyaan Terbuka #1).
-> Jika user belum mengonfirmasi, tanyakan sekali di awal sesi eksekusi pertama, lalu lanjutkan.
+> Dikonfirmasi owner 2026-10-12 (keputusan #13).
 
-- **Frontend:** React 19 + Vite + TypeScript (strict), React Router, Tailwind CSS.
+- **Frontend:** React 19 + Vite + TypeScript (strict + `noUncheckedIndexedAccess`), React Router, Tailwind CSS v4, **shadcn/ui** (Radix) + lucide-react, sonner (toast).
+- **Kualitas:** ESLint *type-aware* (`no-floating-promises` wajib), Prettier, Node ≥ 24 (`.nvmrc`). `npm run check` = typecheck + lint + format + tes.
 - **PWA:** `vite-plugin-pwa` (Workbox) — precache app shell, `registerType: 'prompt'` dengan banner "Versi baru tersedia".
 - **Data lokal/offline:** IndexedDB via Dexie (cache katalog + outbox).
 - **Server state:** TanStack Query.
 - **Backend:** Supabase — Postgres, Auth (email + password), Row Level Security, Storage (logo), Edge Functions (pembuatan akun kasir).
-- **Grafik:** Recharts. **Ekspor:** SheetJS (`xlsx`) + CSV.
-- **Tes:** Vitest (logika murni), pgTAP via `supabase test db` (RLS & fungsi SQL), Playwright (alur E2E kasir).
+- **Grafik:** Recharts via komponen chart shadcn (hanya di chunk owner). **Ekspor:** SheetJS dari CDN resmi SheetJS (paket `xlsx` di npm berhenti di 0.18.5 dengan CVE) + CSV.
+- **Tes:** Vitest (logika murni + integrasi komponen), pgTAP via `supabase test db` (RLS & fungsi SQL), Playwright (E2E, tiap spec dijalankan di 3 perangkat: `phone`, `tablet`, `desktop`).
 - **Hosting:** situs statis (Vercel / Netlify / Cloudflare Pages).
 - Satu aplikasi, dua area: `/kasir/*` dan `/owner/*`. Kode owner (grafik, ekspor) di-*lazy load* agar bundle kasir tetap ringan.
 
@@ -228,7 +244,7 @@ Target: transaksi biasa selesai dalam **≤ 4 ketukan** (pilih item → Bayar �
 
 - Service worker precache app shell; katalog + branding di-cache di IndexedDB dan di-refresh saat online.
 - Transaksi/pengeluaran kasir **selalu** ditulis dulu ke outbox lokal, lalu dikirim oleh sync engine
-  (saat online, saat event `online`, dan berkala). Pengiriman memakai `upsert` dengan `id` dari client → idempoten, aman diulang.
+  (saat online, saat event `online`, dan berkala). Pengiriman memakai RPC `create_transaction` / `create_expense` dengan `id` dari client → idempoten, aman diulang (keputusan #14).
 - Pembatalan saat offline juga masuk outbox (urut setelah insert-nya).
 - Gagal permanen (mis. ditolak RLS/validasi) → tandai di outbox dan tampilkan ke kasir, jangan dibuang diam-diam.
 - Sesi Supabase disimpan lokal; aplikasi kasir tetap bisa dibuka offline selama pernah login di perangkat itu.
@@ -241,6 +257,7 @@ Target: transaksi biasa selesai dalam **≤ 4 ketukan** (pilih item → Bayar �
 Kerjakan berurutan; tiap milestone diakhiri tes hijau dan demo singkat ke user.
 
 0. **Fondasi:** scaffold Vite + TS + Tailwind + Router + ESLint/Prettier + Vitest; Supabase CLI lokal; `.env.example`; README cara menjalankan.
+   *Status 2026-10-12: selesai + pratinjau UI kasir & owner (data contoh), logika murni teruji, E2E 3 perangkat. Milestone 1 (database) ditunda atas permintaan owner.*
 1. **Database:** migrasi semua tabel, constraint, helper RLS, policy, RPC void, `seed.sql` (Saimara + katalog contoh). Tes pgTAP untuk RLS (kasir tidak bisa baca usaha lain, tidak bisa lihat rekap, tidak bisa void hari kemarin).
 2. **Auth & peran:** login, redirect per peran, guard rute, pemilih usaha owner, tema warna per usaha.
 3. **Master data owner:** pengaturan usaha/brand + upload logo, katalog, kategori pengeluaran, Edge Function akun kasir.
@@ -264,9 +281,9 @@ Kerjakan berurutan; tiap milestone diakhiri tes hijau dan demo singkat ke user.
 
 ## 12. Pertanyaan Terbuka (tanyakan sebelum fitur terkait dikerjakan)
 
-1. **Stack teknis** — konfirmasi React + Vite satu aplikasi (bagian 3). Alternatif yang ditolak sementara: Next.js (menyulitkan offline), dua aplikasi terpisah (dua basis kode).
+1. ~~**Stack teknis**~~ — dikonfirmasi 2026-10-12 (keputusan #13).
 2. **Perangkat kasir** di Saimara: Android, iPhone/iPad, atau laptop? (iOS tidak bisa cetak Bluetooth langsung.)
-3. **Printer thermal**: sudah ada? Merek/tipe, 58mm atau 80mm?
+3. **Printer thermal**: sudah ada? Merek/tipe, 58mm atau 80mm? **Wajib mendukung BLE** — Web Bluetooth tidak bisa tersambung ke printer Bluetooth Classic (SPP).
 4. **Bayar di awal atau di akhir?** Asumsi saat ini: transaksi langsung lunas saat dibuat. Jika bayar di akhir, perlu fitur "mobil dalam pengerjaan / belum bayar".
 5. **Daftar layanan & harga Saimara** untuk `seed.sql`.
 6. **Logo & warna** Saimara.
@@ -275,6 +292,9 @@ Kerjakan berurutan; tiap milestone diakhiri tes hijau dan demo singkat ke user.
 9. **Konfirmasi rumus kas bebas** & konsep saldo awal kas (bagian 4).
 10. **Kategori pengeluaran** — asumsi: diatur owner, dengan daftar default di keputusan #6.
 11. **Dana cadangan per usaha** — asumsi: terpisah per usaha (bukan gabungan).
+12. **Modal awal laci & tutup kasir** — rumus "uang laci seharusnya" belum memasukkan uang kembalian awal; belum ada hitung fisik laci/setoran laci ke owner, sehingga selisih uang tidak terdeteksi. Perlu fitur ini?
+13. **Diskon / harga khusus** — keputusan #2 menetapkan harga tetap. Apakah memang tidak pernah ada potongan?
+14. **Lingkungan produksi** — staging terpisah, backup (paket Supabase), SMTP untuk reset password owner, pemantauan error (mis. Sentry).
 
 ## 13. Ditunda (bukan cakupan sekarang)
 
