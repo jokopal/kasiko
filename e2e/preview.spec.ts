@@ -92,3 +92,48 @@ test('a sale made at the cashier appears for the owner', async ({ page }) => {
   await page.goto('/owner/transaksi?periode=today')
   await expect(page.getByText(receiptNo).locator('visible=true')).toBeVisible()
 })
+
+test('receipt can be printed and sent to WhatsApp', async ({ page, context }) => {
+  // Capture what would be printed instead of opening the OS print dialog.
+  await page.addInitScript(() => {
+    window.print = () => {
+      const root = document.getElementById('print-root')
+      document.body.dataset.printed = root?.innerText ?? ''
+    }
+  })
+  await context.route('https://wa.me/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'text/html', body: '<p>wa stub</p>' }),
+  )
+
+  await enterAs(page, 'Kasir')
+  await page.getByRole('button', { name: /^Cuci Mobil Kecil, Rp 35\.000/ }).click()
+  await page.getByRole('button', { name: 'Bayar', exact: true }).locator('visible=true').click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: 'Rp 40.000' }).click()
+  await dialog.getByRole('button', { name: 'Simpan', exact: true }).click()
+  const receiptNo = (await dialog.locator('.font-mono').innerText()).trim()
+
+  await dialog.getByRole('button', { name: 'Print' }).click()
+  await expect(page.locator('body')).toHaveAttribute('data-printed', new RegExp(receiptNo))
+  const printed = await page.locator('body').getAttribute('data-printed')
+  expect(printed).toContain('Kembali')
+  expect(printed).toContain('Rp 5.000')
+
+  await dialog.getByRole('button', { name: 'WhatsApp' }).click()
+  const wa = page.getByRole('dialog', { name: 'Kirim nota via WhatsApp' })
+  await wa.getByLabel('Nomor WhatsApp pelanggan').fill('0812 3456 7890')
+  await snap(page, 'kasir-whatsapp')
+  const popupPromise = page.waitForEvent('popup')
+  await wa.getByRole('button', { name: 'Buka WhatsApp' }).click()
+  const popup = await popupPromise
+  const url = new URL(popup.url())
+  expect(url.pathname).toBe('/6281234567890')
+  expect(url.searchParams.get('text')).toContain(receiptNo)
+  await popup.close()
+
+  await dialog.getByRole('button', { name: 'Transaksi Baru' }).click()
+  await page.getByRole('link', { name: 'Riwayat' }).click()
+  await page.getByRole('button', { name: 'Cetak ulang' }).first().click()
+  await expect(page.getByRole('dialog', { name: 'Cetak ulang nota' })).toContainText(receiptNo)
+  await snap(page, 'kasir-reprint')
+})

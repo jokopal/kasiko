@@ -8,7 +8,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    baseURL: 'http://localhost:4173',
+    baseURL: 'http://localhost:4391',
     locale: 'id-ID',
     timezoneId: 'Asia/Jakarta',
     trace: 'retain-on-failure',
@@ -30,9 +30,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run build && npm run preview -- --port 4173 --strictPort',
-    url: 'http://localhost:4173',
-    reuseExistingServer: !process.env.CI,
+    command: 'npm run build && npm run preview -- --port 4391 --strictPort',
+    url: 'http://localhost:4391',
+    // Never reuse: another app on the same port would silently be tested instead.
+    reuseExistingServer: false,
     timeout: 180_000,
   },
 })

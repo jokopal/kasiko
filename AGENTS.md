@@ -263,6 +263,7 @@ Kerjakan berurutan; tiap milestone diakhiri tes hijau dan demo singkat ke user.
 3. **Master data owner:** pengaturan usaha/brand + upload logo, katalog, kategori pengeluaran, Edge Function akun kasir.
 4. **Kasir online:** katalog, keranjang, pembayaran, kembalian, simpan, riwayat & ringkasan hari ini, pengeluaran laci, pembatalan.
 5. **Nota:** `formatReceipt`, print browser, WhatsApp, lalu Bluetooth ESC/POS.
+   *Status 2026-10-12: selesai di kode & teruji (unit + E2E print/WhatsApp). Bluetooth ESC/POS belum diuji dengan printer fisik — wajib diuji di milestone 9 (Pertanyaan Terbuka #3).*
 6. **Offline:** Dexie, outbox, sync engine, PWA install & update prompt, indikator status.
 7. **Rekap & analisis:** fungsi SQL agregasi + dashboard + ekspor.
 8. **Dana cadangan & kas bebas** (konfirmasi rumus dengan owner dulu).

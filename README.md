@@ -3,7 +3,7 @@
 Aplikasi kasir & keuangan (PWA + Supabase) untuk usaha jasa dengan katalog harga tetap.
 Usaha pertama: **Saimara** (cuci mobil). Keputusan produk & aturan kerja ada di [`AGENTS.md`](./AGENTS.md).
 
-> **Status:** fondasi + pratinjau UI dua peran (Kasir & Owner). Database belum dibuat — aplikasi
+> **Status:** fondasi + pratinjau UI dua peran (Kasir & Owner) + nota (Bluetooth, print, WhatsApp). Database belum dibuat — aplikasi
 > berjalan dalam **mode pratinjau** dengan data contoh yang tersimpan di browser.
 
 ## Stack
@@ -55,7 +55,8 @@ src/
     business/       warna brand, pengaturan usaha
     catalog/        master katalog & kategori
     pos/            layar kasir: keranjang, pembayaran, riwayat, ringkasan + logika murni
-    receipt/        nomor nota (formatReceipt menyusul)
+    receipt/        formatReceipt (satu sumber untuk semua jalur), ESC/POS + Web Bluetooth,
+                    print browser, WhatsApp, pengaturan printer per perangkat
     expenses/       pengeluaran laci & owner
     offline/        status online (outbox & sync menyusul)
     owner/          layout & navigasi owner

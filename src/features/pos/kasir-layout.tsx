@@ -2,9 +2,11 @@ import {
   HistoryIcon,
   LogOutIcon,
   MoreVerticalIcon,
+  PrinterIcon,
   ShoppingCartIcon,
   WalletIcon,
 } from 'lucide-react'
+import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { BusinessLogo } from '@/components/business-logo'
 import { PreviewBanner } from '@/components/preview-banner'
@@ -21,6 +23,7 @@ import { signOut } from '@/features/auth/session'
 import { useBrandTheme } from '@/features/business/use-brand-theme'
 import { SyncStatus } from '@/features/offline/sync-status'
 import { useBusinessData } from '@/features/preview/selectors'
+import { PrinterSettingsDialog } from '@/features/receipt/printer-settings-dialog'
 import { cn } from '@/lib/utils'
 import { CartProvider } from './cart-provider'
 
@@ -33,6 +36,7 @@ const NAV = [
 export function KasirLayout() {
   const { business, cashierAccount } = useBusinessData()
   const navigate = useNavigate()
+  const [printerOpen, setPrinterOpen] = useState(false)
   useBrandTheme(business.primaryColor)
 
   function logout() {
@@ -88,6 +92,10 @@ export function KasirLayout() {
                   <p className="text-xs text-muted-foreground">Akun kasir {business.name}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setPrinterOpen(true)}>
+                  <PrinterIcon />
+                  Pengaturan printer
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={logout} variant="destructive">
                   <LogOutIcon />
                   Keluar
@@ -99,6 +107,11 @@ export function KasirLayout() {
         <main className="min-h-0 flex-1">
           <Outlet />
         </main>
+        <PrinterSettingsDialog
+          open={printerOpen}
+          onOpenChange={setPrinterOpen}
+          business={business}
+        />
       </div>
     </CartProvider>
   )

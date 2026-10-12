@@ -144,3 +144,20 @@
     -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* Browser receipt printing: only #print-root is printed (see PrintHost). */
+#print-root {
+  display: none;
+}
+
+@media print {
+  body > *:not(#print-root) {
+    display: none !important;
+  }
+  #print-root {
+    display: block;
+  }
+  #print-root .receipt-paper {
+    print-color-adjust: exact;
+  }
+}

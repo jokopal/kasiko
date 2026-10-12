@@ -19,9 +19,11 @@ import { OwnerPage } from '@/features/owner/page'
 import { saveBusiness } from '@/features/preview/actions'
 import { useBusinessData } from '@/features/preview/selectors'
 import { resetPreviewState } from '@/features/preview/store'
-import { BUSINESS_TIMEZONES, formatDateTime } from '@/lib/datetime'
-import { formatRupiah } from '@/lib/money'
-import type { Business } from '@/lib/types'
+import { formatReceipt } from '@/features/receipt/format-receipt'
+import { ReceiptPaper } from '@/features/receipt/receipt-paper'
+import { isValidReceiptPrefix } from '@/features/receipt/receipt-number'
+import { BUSINESS_TIMEZONES, yymmdd } from '@/lib/datetime'
+import type { Business, Transaction } from '@/lib/types'
 import { isHexColor, readableForeground } from './brand'
 
 export function SettingsPage() {
@@ -229,42 +231,49 @@ function SettingsForm({ business }: { business: Business }) {
   )
 }
 
-/** Visual stand-in until `formatReceipt` (milestone 5) produces the real lines. */
+/** Rendered by the real `formatReceipt`, so the preview matches every print channel. */
 function ReceiptPreview({ business }: { business: Business }) {
-  const now = new Date()
+  const prefix = isValidReceiptPrefix(business.receiptPrefix) ? business.receiptPrefix : 'XXX'
+  const sample: Transaction = {
+    id: 'preview',
+    businessId: business.id,
+    receiptNo: `${prefix}-${yymmdd(new Date(), business.timezone)}-A0001`,
+    occurredAt: new Date().toISOString(),
+    plateNumber: 'B 1234 XYZ',
+    paymentMethod: 'cash',
+    total: 45_000,
+    cashReceived: 50_000,
+    changeAmount: 5_000,
+    status: 'paid',
+    voidReason: null,
+    voidedAt: null,
+    deviceId: 'preview',
+    items: [
+      {
+        id: '1',
+        catalogItemId: null,
+        nameSnapshot: 'Cuci Mobil Kecil',
+        priceSnapshot: 35_000,
+        qty: 1,
+        lineTotal: 35_000,
+      },
+      {
+        id: '2',
+        catalogItemId: null,
+        nameSnapshot: 'Semir Ban',
+        priceSnapshot: 10_000,
+        qty: 1,
+        lineTotal: 10_000,
+      },
+    ],
+  }
   return (
-    <div className="mx-auto w-full max-w-[280px] rounded-sm border bg-white p-4 font-mono text-[11px] leading-relaxed text-neutral-900 shadow-sm">
-      <p className="text-center text-sm font-bold">{business.name || 'Nama usaha'}</p>
-      <p className="text-center whitespace-pre-line">{business.address}</p>
-      <p className="text-center">{business.phone}</p>
-      <p className="my-2 border-t border-dashed border-neutral-400" />
-      <p>No : {business.receiptPrefix || 'XXX'}-261012-A0001</p>
-      <p>Tgl : {formatDateTime(now, business.timezone)}</p>
-      <p>Plat: B 1234 XYZ</p>
-      <p className="my-2 border-t border-dashed border-neutral-400" />
-      <p className="flex justify-between">
-        <span>Cuci Mobil Kecil</span>
-        <span>{formatRupiah(35_000)}</span>
-      </p>
-      <p className="flex justify-between">
-        <span>Semir Ban</span>
-        <span>{formatRupiah(10_000)}</span>
-      </p>
-      <p className="my-2 border-t border-dashed border-neutral-400" />
-      <p className="flex justify-between font-bold">
-        <span>TOTAL</span>
-        <span>{formatRupiah(45_000)}</span>
-      </p>
-      <p className="flex justify-between">
-        <span>Tunai</span>
-        <span>{formatRupiah(50_000)}</span>
-      </p>
-      <p className="flex justify-between">
-        <span>Kembali</span>
-        <span>{formatRupiah(5_000)}</span>
-      </p>
-      <p className="my-2 border-t border-dashed border-neutral-400" />
-      <p className="text-center">{business.receiptFooter}</p>
+    <div className="flex justify-center rounded-lg bg-muted p-3">
+      <ReceiptPaper
+        lines={formatReceipt(sample, business, 58)}
+        paper={58}
+        className="max-w-full overflow-x-auto p-3 shadow-sm"
+      />
     </div>
   )
 }

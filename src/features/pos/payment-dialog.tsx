@@ -1,10 +1,4 @@
-import {
-  BluetoothIcon,
-  CheckCircle2Icon,
-  DeleteIcon,
-  MessageCircleIcon,
-  PrinterIcon,
-} from 'lucide-react'
+import { CheckCircle2Icon, DeleteIcon } from 'lucide-react'
 import { useState, type KeyboardEvent } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -17,10 +11,12 @@ import {
 } from '@/components/ui/dialog'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { createTransaction } from '@/features/preview/actions'
+import { ReceiptActions } from '@/features/receipt/receipt-actions'
 import { formatRupiah } from '@/lib/money'
 import {
   PAYMENT_METHOD_LABEL,
   PAYMENT_METHODS,
+  type Business,
   type PaymentMethod,
   type Transaction,
 } from '@/lib/types'
@@ -33,10 +29,10 @@ const MAX_CASH_DIGITS = 10
 interface PaymentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  businessId: string
+  business: Business
 }
 
-export function PaymentDialog({ open, onOpenChange, businessId }: PaymentDialogProps) {
+export function PaymentDialog({ open, onOpenChange, business }: PaymentDialogProps) {
   const [saved, setSaved] = useState<Transaction | null>(null)
   const { reset } = useCart()
 
@@ -52,9 +48,13 @@ export function PaymentDialog({ open, onOpenChange, businessId }: PaymentDialogP
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[100dvh] gap-5 overflow-y-auto sm:max-w-lg">
         {saved ? (
-          <PaymentDone transaction={saved} onNew={() => handleOpenChange(false)} />
+          <PaymentDone
+            transaction={saved}
+            business={business}
+            onNew={() => handleOpenChange(false)}
+          />
         ) : (
-          open && <PaymentForm businessId={businessId} onSaved={setSaved} />
+          open && <PaymentForm businessId={business.id} onSaved={setSaved} />
         )}
       </DialogContent>
     </Dialog>
@@ -224,10 +224,15 @@ function PaymentForm({
   )
 }
 
-function PaymentDone({ transaction, onNew }: { transaction: Transaction; onNew: () => void }) {
-  const hasBluetooth = typeof navigator !== 'undefined' && 'bluetooth' in navigator
-  const comingSoon = () => toast.info('Cetak & kirim nota dikerjakan pada milestone Nota')
-
+function PaymentDone({
+  transaction,
+  business,
+  onNew,
+}: {
+  transaction: Transaction
+  business: Business
+  onNew: () => void
+}) {
   return (
     <div className="grid gap-5">
       <DialogHeader className="items-center text-center">
@@ -250,22 +255,7 @@ function PaymentDone({ transaction, onNew }: { transaction: Transaction; onNew: 
         )}
       </div>
 
-      <div className={cn('grid gap-2', hasBluetooth ? 'grid-cols-3' : 'grid-cols-2')}>
-        {hasBluetooth && (
-          <Button variant="outline" className="h-14 flex-col gap-1 text-xs" onClick={comingSoon}>
-            <BluetoothIcon className="size-5" />
-            Cetak
-          </Button>
-        )}
-        <Button variant="outline" className="h-14 flex-col gap-1 text-xs" onClick={comingSoon}>
-          <PrinterIcon className="size-5" />
-          Print
-        </Button>
-        <Button variant="outline" className="h-14 flex-col gap-1 text-xs" onClick={comingSoon}>
-          <MessageCircleIcon className="size-5" />
-          WhatsApp
-        </Button>
-      </div>
+      <ReceiptActions transaction={transaction} business={business} />
 
       <Button size="lg" className="h-14 text-lg font-semibold" onClick={onNew} autoFocus>
         Transaksi Baru

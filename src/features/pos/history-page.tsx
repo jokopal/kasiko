@@ -4,12 +4,23 @@ import { toast } from 'sonner'
 import { VoidDialog } from '@/components/void-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { voidExpense, voidTransaction } from '@/features/preview/actions'
 import { useBusinessData } from '@/features/preview/selectors'
+import { formatReceipt } from '@/features/receipt/format-receipt'
+import { printerSettings } from '@/features/receipt/printer-settings'
+import { ReceiptActions } from '@/features/receipt/receipt-actions'
+import { ReceiptPaper } from '@/features/receipt/receipt-paper'
 import { businessDayRange, formatLongDate, formatTime, isInRange } from '@/lib/datetime'
 import { formatRupiah } from '@/lib/money'
-import { PAYMENT_METHOD_LABEL, type Expense, type Transaction } from '@/lib/types'
+import { PAYMENT_METHOD_LABEL, type Business, type Expense, type Transaction } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 type VoidTarget = { kind: 'transaction'; row: Transaction } | { kind: 'expense'; row: Expense }
@@ -20,6 +31,7 @@ const newestFirst = (a: { occurredAt: string }, b: { occurredAt: string }) =>
 export function HistoryPage() {
   const { business, transactions, expenses, expenseCategories } = useBusinessData()
   const [target, setTarget] = useState<VoidTarget | null>(null)
+  const [reprint, setReprint] = useState<Transaction | null>(null)
   const tz = business.timezone
   const today = businessDayRange(new Date(), tz)
   const inToday = (row: { occurredAt: string }) => isInRange(new Date(row.occurredAt), today)
@@ -92,12 +104,7 @@ export function HistoryPage() {
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9"
-                    onClick={() => toast.info('Cetak ulang nota dikerjakan pada milestone Nota')}
-                  >
+                  <Button variant="outline" size="sm" className="h-9" onClick={() => setReprint(t)}>
                     <PrinterIcon />
                     Cetak ulang
                   </Button>
@@ -172,6 +179,7 @@ export function HistoryPage() {
         </TabsContent>
       </Tabs>
 
+      <ReprintDialog transaction={reprint} business={business} onClose={() => setReprint(null)} />
       <VoidDialog
         open={target !== null}
         onOpenChange={(open) => !open && setTarget(null)}
@@ -180,6 +188,40 @@ export function HistoryPage() {
         onConfirm={confirmVoid}
       />
     </div>
+  )
+}
+
+function ReprintDialog({
+  transaction,
+  business,
+  onClose,
+}: {
+  transaction: Transaction | null
+  business: Business
+  onClose: () => void
+}) {
+  const { paperWidth } = printerSettings.useValue()
+  return (
+    <Dialog open={transaction !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[100dvh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Cetak ulang nota</DialogTitle>
+          <DialogDescription className="font-mono">{transaction?.receiptNo}</DialogDescription>
+        </DialogHeader>
+        {transaction && (
+          <>
+            <div className="flex justify-center rounded-lg bg-muted p-3">
+              <ReceiptPaper
+                lines={formatReceipt(transaction, business, paperWidth)}
+                paper={paperWidth}
+                className="max-w-full overflow-x-auto p-3 shadow-sm"
+              />
+            </div>
+            <ReceiptActions transaction={transaction} business={business} />
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 

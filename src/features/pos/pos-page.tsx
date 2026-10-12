@@ -173,7 +173,7 @@ export function PosPage() {
         </SheetContent>
       </Sheet>
 
-      <PaymentDialog open={payOpen} onOpenChange={setPayOpen} businessId={business.id} />
+      <PaymentDialog open={payOpen} onOpenChange={setPayOpen} business={business} />
       <ExpenseDialog
         open={expenseOpen}
         onOpenChange={setExpenseOpen}
