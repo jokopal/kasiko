@@ -21,7 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { OwnerPage } from '@/features/owner/page'
-import { voidExpense } from '@/features/preview/actions'
+import { voidExpenseAsOwner } from '@/features/preview/actions'
 import { useBusinessData } from '@/features/preview/selectors'
 import { PeriodPicker } from '@/features/reports/period-picker'
 import { usePeriod } from '@/features/reports/use-period'
@@ -180,7 +180,7 @@ export function ExpensesPage() {
         }
         onConfirm={(reason) => {
           if (!target) return { ok: false, error: 'Tidak ada data dipilih' }
-          const result = voidExpense({ id: target.id, reason, role: 'owner' })
+          const result = voidExpenseAsOwner(target.id, reason)
           if (result.ok) toast.success('Pengeluaran dibatalkan')
           return result
         }}

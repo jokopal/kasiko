@@ -1,4 +1,5 @@
 import {
+  DownloadIcon,
   HistoryIcon,
   LogOutIcon,
   MoreVerticalIcon,
@@ -6,9 +7,10 @@ import {
   ShoppingCartIcon,
   WalletIcon,
 } from 'lucide-react'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { BusinessLogo } from '@/components/business-logo'
+import { PageLoading } from '@/components/page-loading'
 import { PreviewBanner } from '@/components/preview-banner'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,13 +21,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { signOut } from '@/features/auth/session'
+import { signOut, useSession } from '@/features/auth/session'
 import { useBrandTheme } from '@/features/business/use-brand-theme'
+import { promptInstall, useCanInstall } from '@/features/offline/install-prompt'
 import { SyncStatus } from '@/features/offline/sync-status'
-import { useBusinessData } from '@/features/preview/selectors'
 import { PrinterSettingsDialog } from '@/features/receipt/printer-settings-dialog'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import { CartProvider } from './cart-provider'
+import { KasirDataProvider } from './kasir-data-provider'
+import { useKasirData } from './use-kasir-data'
 
 const NAV = [
   { to: '/kasir', label: 'Kasir', icon: ShoppingCartIcon, end: true },
@@ -34,12 +39,30 @@ const NAV = [
 ] as const
 
 export function KasirLayout() {
-  const { business, cashierAccount } = useBusinessData()
+  const session = useSession()
+  if (!session) return null // RequireRole redirects before this renders
+  return (
+    <KasirDataProvider businessId={session.businessId}>
+      <KasirShell />
+    </KasirDataProvider>
+  )
+}
+
+function KasirShell() {
+  const { business, device, outbox } = useKasirData()
   const navigate = useNavigate()
   const [printerOpen, setPrinterOpen] = useState(false)
+  const canInstall = useCanInstall()
   useBrandTheme(business.primaryColor)
 
   function logout() {
+    // Decision #20: never strand unsynced sales on a signed-out device.
+    if (outbox.length > 0) {
+      toast.error(
+        `Masih ada ${outbox.length} data belum tersinkron. Sambungkan internet dan tunggu sampai selesai sebelum keluar.`,
+      )
+      return
+    }
     signOut()
     void navigate('/masuk', { replace: true })
   }
@@ -55,7 +78,7 @@ export function KasirLayout() {
               <p className="truncate leading-tight font-semibold md:text-lg">{business.name}</p>
               <p className="truncate text-xs opacity-80">Kasir</p>
             </div>
-            <SyncStatus pending={0} />
+            <SyncStatus entries={outbox} />
             <nav aria-label="Menu kasir" className="flex items-center gap-1">
               {NAV.map(({ to, label, icon: Icon, end }) => (
                 <NavLink
@@ -88,10 +111,16 @@ export function KasirLayout() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel className="font-normal">
-                  <p className="font-medium">{cashierAccount?.username ?? 'Kasir'}</p>
-                  <p className="text-xs text-muted-foreground">Akun kasir {business.name}</p>
+                  <p className="font-medium">Akun kasir {business.name}</p>
+                  <p className="text-xs text-muted-foreground">Perangkat {device.deviceCode}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {canInstall && (
+                  <DropdownMenuItem onSelect={() => void promptInstall()}>
+                    <DownloadIcon />
+                    Pasang aplikasi
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onSelect={() => setPrinterOpen(true)}>
                   <PrinterIcon />
                   Pengaturan printer
@@ -105,7 +134,9 @@ export function KasirLayout() {
           </div>
         </header>
         <main className="min-h-0 flex-1">
-          <Outlet />
+          <Suspense fallback={<PageLoading />}>
+            <Outlet />
+          </Suspense>
         </main>
         <PrinterSettingsDialog
           open={printerOpen}

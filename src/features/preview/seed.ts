@@ -11,12 +11,13 @@ import type {
   Transaction,
 } from '@/lib/types'
 import { quickCashOptions } from '@/features/pos/payment'
-import { formatReceiptNo, type DailySequence } from '@/features/receipt/receipt-number'
+import { formatReceiptNo } from '@/features/receipt/receipt-number'
 
 // Sample data for the preview. Prices are placeholders until the owner provides the
 // real Saimara price list (open question #5).
 
-export const PREVIEW_DEVICE = { id: 'preview-device', code: 'A' } as const
+/** The device that produced the sample history; real devices register after it. */
+export const SEED_DEVICE = { id: 'seed-device', code: 'A' } as const
 
 export interface CashierAccount {
   businessId: string
@@ -24,8 +25,16 @@ export interface CashierAccount {
   isActive: boolean
 }
 
+export interface RegisteredDevice {
+  id: string
+  businessId: string
+  /** Server-assigned, unique per business, never reused (decision #16). */
+  code: string
+  registeredAt: string
+}
+
 export interface PreviewState {
-  version: 1
+  version: 2
   seededAt: string
   businesses: Business[]
   catalogCategories: CatalogCategory[]
@@ -35,8 +44,7 @@ export interface PreviewState {
   expenses: Expense[]
   reserveMovements: ReserveMovement[]
   cashierAccounts: CashierAccount[]
-  /** Receipt counter per business for this device. */
-  sequences: Record<string, DailySequence>
+  devices: RegisteredDevice[]
 }
 
 interface CatalogSeed {
@@ -151,7 +159,7 @@ interface BusinessSeed {
 function buildBusiness(
   input: BusinessSeed,
   now: Date,
-  state: Omit<PreviewState, 'version' | 'seededAt' | 'businesses' | 'cashierAccounts'>,
+  state: Omit<PreviewState, 'version' | 'seededAt' | 'businesses' | 'cashierAccounts' | 'devices'>,
 ) {
   const { business, catalog, dailyBase } = input
   const random = mulberry32(input.seed)
@@ -247,7 +255,7 @@ function buildBusiness(
           prefix: business.receiptPrefix,
           occurredAt,
           timeZone: tz,
-          deviceCode: PREVIEW_DEVICE.code,
+          deviceCode: SEED_DEVICE.code,
           seq: index + 1,
         }),
         occurredAt: occurredAt.toISOString(),
@@ -259,11 +267,11 @@ function buildBusiness(
         status: isVoid ? 'void' : 'paid',
         voidReason: isVoid ? 'Salah input layanan' : null,
         voidedAt: isVoid ? new Date(occurredAt.getTime() + 5 * 60_000).toISOString() : null,
-        deviceId: PREVIEW_DEVICE.id,
+        deviceId: `${SEED_DEVICE.id}-${business.id}`,
+        receivedAt: occurredAt.toISOString(),
         items: txItems,
       })
     })
-    if (isToday) state.sequences[business.id] = { dayKey, seq: stamps.length }
 
     // Small daily drawer expenses.
     const drawerExpenses: [ExpenseCategoryName, string, number][] = [
@@ -355,6 +363,7 @@ function expense(
     status: 'active',
     voidReason: null,
     voidedAt: null,
+    receivedAt: occurredAt.toISOString(),
   }
 }
 
@@ -387,7 +396,7 @@ export function createSeedState(now: Date): PreviewState {
   }
 
   const state: PreviewState = {
-    version: 1,
+    version: 2,
     seededAt: now.toISOString(),
     businesses: [saimara, demo],
     catalogCategories: [],
@@ -400,7 +409,12 @@ export function createSeedState(now: Date): PreviewState {
       { businessId: saimara.id, username: 'kasir.saimara', isActive: true },
       { businessId: demo.id, username: 'kasir.contoh', isActive: true },
     ],
-    sequences: {},
+    devices: [saimara, demo].map((b) => ({
+      id: `${SEED_DEVICE.id}-${b.id}`,
+      businessId: b.id,
+      code: SEED_DEVICE.code,
+      registeredAt: now.toISOString(),
+    })),
   }
   buildBusiness({ business: saimara, catalog: SAIMARA_CATALOG, dailyBase: 18, seed: 7 }, now, state)
   buildBusiness({ business: demo, catalog: DEMO_CATALOG, dailyBase: 6, seed: 11 }, now, state)

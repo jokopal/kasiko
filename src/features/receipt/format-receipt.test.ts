@@ -32,6 +32,7 @@ const tx: Transaction = {
   voidReason: null,
   voidedAt: null,
   deviceId: 'd',
+  receivedAt: null,
   items: [
     {
       id: 'i1',

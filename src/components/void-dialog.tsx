@@ -17,7 +17,7 @@ interface VoidDialogProps {
   onOpenChange: (open: boolean) => void
   title: string
   description: string
-  onConfirm: (reason: string) => Result
+  onConfirm: (reason: string) => Result | Promise<Result>
 }
 
 export function VoidDialog({ open, onOpenChange, title, description, onConfirm }: VoidDialogProps) {
@@ -46,16 +46,20 @@ function VoidForm({
 }: Omit<VoidDialogProps, 'open' | 'onOpenChange'> & { onDone: () => void }) {
   const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault()
-    const result = onConfirm(reason)
+    if (busy) return
+    setBusy(true)
+    const result = await onConfirm(reason)
+    setBusy(false)
     if (result.ok) onDone()
     else setError(result.error)
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-4">
+    <form onSubmit={(event) => void submit(event)} className="grid gap-4">
       <DialogHeader>
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
@@ -76,7 +80,7 @@ function VoidForm({
         <Button type="button" variant="outline" size="lg" onClick={onDone}>
           Kembali
         </Button>
-        <Button type="submit" variant="destructive" size="lg">
+        <Button type="submit" variant="destructive" size="lg" disabled={busy}>
           Batalkan data
         </Button>
       </DialogFooter>

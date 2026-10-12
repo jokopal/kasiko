@@ -33,6 +33,7 @@ function testTransaction(business: Business): Transaction {
     voidReason: null,
     voidedAt: null,
     deviceId: 'test',
+    receivedAt: null,
     items: [
       {
         id: 'test',

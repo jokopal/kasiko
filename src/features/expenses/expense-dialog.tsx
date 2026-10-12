@@ -19,8 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { createExpense } from '@/features/preview/actions'
+import { recordDrawerExpense } from '@/features/pos/commands'
+import { createOwnerExpense } from '@/features/preview/actions'
 import { formatRupiah } from '@/lib/money'
+import { fail } from '@/lib/result'
 import type { ExpenseCategory, ExpenseSource } from '@/lib/types'
 
 interface ExpenseDialogProps {
@@ -65,9 +67,21 @@ function ExpenseForm({
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  function submit(event: FormEvent) {
+  const [saving, setSaving] = useState(false)
+
+  async function submit(event: FormEvent) {
     event.preventDefault()
-    const result = createExpense({ businessId, categoryId, amount: amount ?? 0, note, source })
+    if (saving) return
+    setSaving(true)
+    const input = { businessId, categoryId, amount: amount ?? 0, note }
+    // Cashier: outbox, works offline. Owner: straight to the server (online-only).
+    const result =
+      source === 'drawer'
+        ? await recordDrawerExpense({ ...input, categories }).catch(() =>
+            fail('Gagal menyimpan di perangkat. Coba lagi.'),
+          )
+        : createOwnerExpense(input)
+    setSaving(false)
     if (!result.ok) {
       setError(result.error)
       return
@@ -77,7 +91,7 @@ function ExpenseForm({
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-5">
+    <form onSubmit={(event) => void submit(event)} className="grid gap-5">
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="expense-amount">Nominal</FieldLabel>
@@ -120,7 +134,7 @@ function ExpenseForm({
         <Button type="button" variant="outline" size="lg" onClick={onDone}>
           Batal
         </Button>
-        <Button type="submit" size="lg">
+        <Button type="submit" size="lg" disabled={saving}>
           Simpan
         </Button>
       </DialogFooter>

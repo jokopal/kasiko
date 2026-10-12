@@ -44,6 +44,8 @@ test('cashier completes a cash sale in four taps', async ({ page }) => {
 })
 
 test('owner sees the dashboard and every page loads', async ({ page }) => {
+  // Multi-phase scenario; emulated phones under parallel load need more than 30s.
+  test.slow()
   await enterAs(page, 'Owner')
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
   await expect(page.getByText('Tren harian')).toBeVisible()
@@ -136,4 +138,64 @@ test('receipt can be printed and sent to WhatsApp', async ({ page, context }) =>
   await page.getByRole('button', { name: 'Cetak ulang' }).first().click()
   await expect(page.getByRole('dialog', { name: 'Cetak ulang nota' })).toContainText(receiptNo)
   await snap(page, 'kasir-reprint')
+})
+
+test('cashier keeps selling offline and syncs when back online', async ({ page, context }) => {
+  // Multi-phase scenario; emulated phones under parallel load need more than 30s.
+  test.slow()
+  await enterAs(page, 'Kasir')
+  await expect(page.getByRole('button', { name: /^Cuci Motor, Rp 15\.000/ })).toBeVisible()
+  // The service worker must have precached the app shell before going offline.
+  await page.evaluate(() => navigator.serviceWorker.ready.then(() => true))
+
+  await context.setOffline(true)
+  await page.reload()
+  await expect(page.getByRole('button', { name: /^Cuci Motor, Rp 15\.000/ })).toBeVisible()
+
+  await page.getByRole('button', { name: /^Cuci Motor, Rp 15\.000/ }).click()
+  await page.getByRole('button', { name: 'Bayar', exact: true }).locator('visible=true').click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: 'Uang Pas' }).click()
+  await dialog.getByRole('button', { name: 'Simpan', exact: true }).click()
+  await expect(dialog.getByText('Transaksi tersimpan')).toBeVisible()
+  const receiptNo = (await dialog.locator('.font-mono').innerText()).trim()
+  await dialog.getByRole('button', { name: 'Transaksi Baru' }).click()
+
+  await expect(page.getByTestId('outbox-count')).toHaveText('1')
+  await snap(page, 'kasir-offline')
+  await page.getByRole('link', { name: 'Riwayat' }).click()
+  await expect(page.getByText('Belum tersinkron', { exact: true })).toBeVisible()
+
+  // Logging out would strand the sale on this device, so it is refused.
+  await page.getByRole('button', { name: 'Menu akun' }).click()
+  await page.getByRole('menuitem', { name: 'Keluar' }).click()
+  await expect(page.getByText(/belum tersinkron. Sambungkan internet/)).toBeVisible()
+  await expect(page).toHaveURL(/\/kasir\/riwayat$/)
+
+  await context.setOffline(false)
+  await expect(page.getByTestId('outbox-count')).toHaveCount(0)
+  await expect(page.getByText('Belum tersinkron', { exact: true })).toHaveCount(0)
+
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'kasiko.session.v1',
+      JSON.stringify({ role: 'owner', businessId: 'saimara', displayName: 'Owner' }),
+    )
+  })
+  await page.goto('/owner/transaksi?periode=today')
+  await expect(page.getByText(receiptNo).locator('visible=true')).toBeVisible()
+})
+
+test('a cashier opening /owner is redirected without downloading owner code', async ({ page }) => {
+  await enterAs(page, 'Kasir')
+  await expect(page.getByRole('button', { name: /^Cuci Motor, Rp 15\.000/ })).toBeVisible()
+  const ownerChunks: string[] = []
+  page.on('request', (request) => {
+    if (/(owner-layout|dashboard-page)-[\w-]+\.js/.test(request.url()))
+      ownerChunks.push(request.url())
+  })
+  await page.goto('/owner')
+  await expect(page).toHaveURL(/\/kasir$/)
+  await expect(page.getByRole('button', { name: /^Cuci Motor, Rp 15\.000/ })).toBeVisible()
+  expect(ownerChunks).toEqual([])
 })

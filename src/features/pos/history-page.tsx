@@ -12,41 +12,36 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { voidExpense, voidTransaction } from '@/features/preview/actions'
-import { useBusinessData } from '@/features/preview/selectors'
+import type { SyncState } from '@/features/offline/local-view'
 import { formatReceipt } from '@/features/receipt/format-receipt'
 import { printerSettings } from '@/features/receipt/printer-settings'
 import { ReceiptActions } from '@/features/receipt/receipt-actions'
 import { ReceiptPaper } from '@/features/receipt/receipt-paper'
-import { businessDayRange, formatLongDate, formatTime, isInRange } from '@/lib/datetime'
+import { formatLongDate, formatTime } from '@/lib/datetime'
 import { formatRupiah } from '@/lib/money'
 import { PAYMENT_METHOD_LABEL, type Business, type Expense, type Transaction } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { requestVoid } from './commands'
+import { useKasirData } from './use-kasir-data'
 
 type VoidTarget = { kind: 'transaction'; row: Transaction } | { kind: 'expense'; row: Expense }
 
-const newestFirst = (a: { occurredAt: string }, b: { occurredAt: string }) =>
-  b.occurredAt.localeCompare(a.occurredAt)
-
 export function HistoryPage() {
-  const { business, transactions, expenses, expenseCategories } = useBusinessData()
+  // Today only, local + synced, newest first (see KasirDataProvider).
+  const {
+    business,
+    transactions: todaysTransactions,
+    expenses: todaysExpenses,
+    expenseCategories,
+  } = useKasirData()
   const [target, setTarget] = useState<VoidTarget | null>(null)
   const [reprint, setReprint] = useState<Transaction | null>(null)
   const tz = business.timezone
-  const today = businessDayRange(new Date(), tz)
-  const inToday = (row: { occurredAt: string }) => isInRange(new Date(row.occurredAt), today)
-
-  // Cashiers only ever see today's records and drawer expenses (RLS mirrors this).
-  const todaysTransactions = transactions.filter(inToday).sort(newestFirst)
-  const todaysExpenses = expenses
-    .filter((e) => e.source === 'drawer' && inToday(e))
-    .sort(newestFirst)
   const categoryName = (id: string) => expenseCategories.find((c) => c.id === id)?.name ?? '—'
 
-  function confirmVoid(reason: string) {
+  async function confirmVoid(reason: string) {
     if (!target) return { ok: false as const, error: 'Tidak ada data dipilih' }
-    const input = { id: target.row.id, reason, role: 'cashier' as const }
-    const result = target.kind === 'transaction' ? voidTransaction(input) : voidExpense(input)
+    const result = await requestVoid(target, business, reason)
     if (result.ok) toast.success('Data dibatalkan')
     return result
   }
@@ -66,7 +61,7 @@ export function HistoryPage() {
 
         <TabsContent value="transactions" className="mt-3">
           <ul className="grid gap-2">
-            {todaysTransactions.map((t) => (
+            {todaysTransactions.map(({ row: t, sync }) => (
               <li
                 key={t.id}
                 className={cn(
@@ -83,6 +78,7 @@ export function HistoryPage() {
                       <span className="font-mono text-xs text-muted-foreground">{t.receiptNo}</span>
                       <Badge variant="outline">{PAYMENT_METHOD_LABEL[t.paymentMethod]}</Badge>
                       {t.status === 'void' && <Badge variant="destructive">Dibatalkan</Badge>}
+                      <SyncBadge sync={sync} />
                     </div>
                     <p className="mt-1 truncate text-sm text-muted-foreground">
                       {t.items
@@ -128,7 +124,7 @@ export function HistoryPage() {
 
         <TabsContent value="expenses" className="mt-3">
           <ul className="grid gap-2">
-            {todaysExpenses.map((e) => (
+            {todaysExpenses.map(({ row: e, sync }) => (
               <li
                 key={e.id}
                 className={cn(
@@ -143,6 +139,7 @@ export function HistoryPage() {
                     </span>
                     <Badge variant="outline">{categoryName(e.categoryId)}</Badge>
                     {e.status === 'void' && <Badge variant="destructive">Dibatalkan</Badge>}
+                    <SyncBadge sync={sync} />
                   </div>
                   {e.note && (
                     <p className="mt-1 truncate text-sm text-muted-foreground">{e.note}</p>
@@ -222,6 +219,17 @@ function ReprintDialog({
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+function SyncBadge({ sync }: { sync: SyncState }) {
+  if (sync === 'synced') return null
+  return sync === 'failed' ? (
+    <Badge variant="destructive">Gagal sinkron</Badge>
+  ) : (
+    <Badge variant="secondary" className="bg-amber-100 text-amber-900">
+      Belum tersinkron
+    </Badge>
   )
 }
 

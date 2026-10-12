@@ -30,6 +30,7 @@ function tx(
     voidReason: null,
     voidedAt: null,
     deviceId: 'd',
+    receivedAt: null,
     items: [
       {
         id: crypto.randomUUID(),
@@ -54,6 +55,7 @@ function ex(partial: Partial<Expense> & Pick<Expense, 'amount' | 'occurredAt'>):
     status: 'active',
     voidReason: null,
     voidedAt: null,
+    receivedAt: null,
     ...partial,
   }
 }

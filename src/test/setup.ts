@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest'
+import 'fake-indexeddb/auto'
 
 // jsdom lacks these browser APIs used by Radix, the sidebar and Recharts.
 if (!window.matchMedia) {

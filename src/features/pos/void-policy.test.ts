@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkVoid, type VoidCheckInput } from './void-policy'
+import { checkVoid, isPlausibleClientTime, type VoidCheckInput } from './void-policy'
 
 const base: VoidCheckInput = {
   role: 'cashier',
@@ -36,5 +36,17 @@ describe('checkVoid', () => {
 
   it('rejects voiding twice', () => {
     expect(checkVoid({ ...base, isAlreadyVoid: true }).ok).toBe(false)
+  })
+})
+
+describe('isPlausibleClientTime', () => {
+  const server = new Date('2026-10-12T10:00:00Z')
+  it('accepts small skew and late offline arrivals', () => {
+    expect(isPlausibleClientTime(new Date('2026-10-12T10:03:00Z'), server)).toBe(true)
+    expect(isPlausibleClientTime(new Date('2026-10-10T10:00:00Z'), server)).toBe(true)
+  })
+  it('rejects clocks in the future or far in the past', () => {
+    expect(isPlausibleClientTime(new Date('2026-10-12T10:30:00Z'), server)).toBe(false)
+    expect(isPlausibleClientTime(new Date('2026-10-01T10:00:00Z'), server)).toBe(false)
   })
 })

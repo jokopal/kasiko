@@ -3,7 +3,7 @@
 Aplikasi kasir & keuangan (PWA + Supabase) untuk usaha jasa dengan katalog harga tetap.
 Usaha pertama: **Saimara** (cuci mobil). Keputusan produk & aturan kerja ada di [`AGENTS.md`](./AGENTS.md).
 
-> **Status:** fondasi + pratinjau UI dua peran (Kasir & Owner) + nota (Bluetooth, print, WhatsApp). Database belum dibuat — aplikasi
+> **Status:** fondasi + pratinjau UI dua peran (Kasir & Owner) + nota (Bluetooth, print, WhatsApp) + offline/PWA. Database belum dibuat — aplikasi
 > berjalan dalam **mode pratinjau** dengan data contoh yang tersimpan di browser.
 
 ## Stack
@@ -23,6 +23,9 @@ npm run dev            # http://localhost:5173
 Buka `/masuk`, lalu pilih **Masuk sebagai Kasir** atau **Masuk sebagai Owner**. Buka keduanya di dua
 tab untuk melihat transaksi kasir langsung muncul di dashboard owner. Data contoh bisa dikembalikan
 lewat Owner → Pengaturan Usaha → **Reset data pratinjau**.
+
+Uji offline: `npm run build && npm run preview`, buka kasir sekali, lalu matikan jaringan (DevTools →
+Network → Offline). Transaksi masuk antrean dan terkirim otomatis saat online kembali.
 
 Uji di HP pada jaringan yang sama: `npm run dev -- --host`, lalu buka alamat IP yang ditampilkan.
 
@@ -58,11 +61,13 @@ src/
     receipt/        formatReceipt (satu sumber untuk semua jalur), ESC/POS + Web Bluetooth,
                     print browser, WhatsApp, pengaturan printer per perangkat
     expenses/       pengeluaran laci & owner
-    offline/        status online (outbox & sync menyusul)
+    offline/        IndexedDB (Dexie): outbox, mesin sinkron, registrasi perangkat, cache
+                    katalog, status sinkron, PWA (update prompt & pasang aplikasi)
     owner/          layout & navigasi owner
     reports/        rumus keuangan, periode, dashboard, transaksi
     reserve/        dana cadangan
-    preview/        PENGGANTI DATABASE SEMENTARA — dihapus saat lapisan Supabase dibangun
+    preview/        PENGGANTI DATABASE SEMENTARA (server.ts meniru RPC, transport.ts meniru jaringan)
+                    — diganti lapisan Supabase di milestone 1
   lib/              uang, tanggal per zona waktu, id, tipe domain, supabase client
 supabase/           config lokal, migrations/, functions/, tests/ (milestone 1)
 e2e/                spec Playwright

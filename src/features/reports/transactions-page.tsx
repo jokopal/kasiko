@@ -21,7 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { OwnerPage } from '@/features/owner/page'
-import { voidTransaction } from '@/features/preview/actions'
+import { voidTransactionAsOwner } from '@/features/preview/actions'
 import { useBusinessData } from '@/features/preview/selectors'
 import { formatDateTime, isInRange } from '@/lib/datetime'
 import { formatRupiah, sumRupiah } from '@/lib/money'
@@ -214,7 +214,7 @@ export function TransactionsPage() {
         description={target ? `${target.receiptNo} · ${formatRupiah(target.total)}` : ''}
         onConfirm={(reason) => {
           if (!target) return { ok: false, error: 'Tidak ada transaksi dipilih' }
-          const result = voidTransaction({ id: target.id, reason, role: 'owner' })
+          const result = voidTransactionAsOwner(target.id, reason)
           if (result.ok) toast.success('Transaksi dibatalkan')
           return result
         }}

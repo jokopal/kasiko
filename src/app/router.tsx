@@ -1,103 +1,92 @@
-import { createBrowserRouter, Outlet, type RouteObject } from 'react-router-dom'
+import { lazy, Suspense, type ComponentType, type ReactNode } from 'react'
+import { createBrowserRouter, type RouteObject } from 'react-router-dom'
 import { KasirLayout } from '@/features/pos/kasir-layout'
 import { PosPage } from '@/features/pos/pos-page'
+import type { Role } from '@/lib/types'
 import { RequireRole, RootRedirect } from './guards'
 import { LoadingScreen } from './pages/loading-screen'
 import { LoginPage } from './pages/login-page'
 import { NotFoundPage } from './pages/not-found-page'
 import { RouteErrorPage } from './pages/route-error-page'
 
-// The cashier area is bundled eagerly (it must open instantly, also offline);
-// the owner area, with charts, is lazy-loaded so the cashier bundle stays small.
+// Code splitting uses React.lazy, not route `lazy`: React Router resolves route-level
+// `lazy` for every matched route before rendering, which would make a cashier opening
+// /owner download the owner bundle before the role guard redirects. With React.lazy a
+// chunk is only fetched once its component actually renders, i.e. after the guard.
+//
+// The cashier screen itself is bundled eagerly: it must open instantly, also offline.
+
+function page<K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) {
+  const Component = lazy<ComponentType>(async () => ({ default: (await load())[name] }))
+  return <Component />
+}
+
+function guarded(role: Role, children: ReactNode) {
+  return (
+    <RequireRole role={role}>
+      <Suspense fallback={<LoadingScreen />}>{children}</Suspense>
+    </RequireRole>
+  )
+}
+
 export const routes: RouteObject[] = [
   {
     errorElement: <RouteErrorPage />,
-    HydrateFallback: LoadingScreen,
     children: [
       { index: true, element: <RootRedirect /> },
       { path: 'masuk', element: <LoginPage /> },
       {
         path: 'kasir',
-        element: (
-          <RequireRole role="cashier">
-            <KasirLayout />
-          </RequireRole>
-        ),
+        element: guarded('cashier', <KasirLayout />),
         children: [
           { index: true, element: <PosPage /> },
           {
             path: 'riwayat',
-            lazy: async () => ({
-              Component: (await import('@/features/pos/history-page')).HistoryPage,
-            }),
+            element: page(() => import('@/features/pos/history-page'), 'HistoryPage'),
           },
           {
             path: 'ringkasan',
-            lazy: async () => ({
-              Component: (await import('@/features/pos/summary-page')).SummaryPage,
-            }),
+            element: page(() => import('@/features/pos/summary-page'), 'SummaryPage'),
           },
         ],
       },
       {
         path: 'owner',
-        // Guard before the lazy layout so other roles never download owner code.
-        element: (
-          <RequireRole role="owner">
-            <Outlet />
-          </RequireRole>
+        element: guarded(
+          'owner',
+          page(() => import('@/features/owner/owner-layout'), 'OwnerLayout'),
         ),
         children: [
           {
-            lazy: async () => ({
-              Component: (await import('@/features/owner/owner-layout')).OwnerLayout,
-            }),
-            children: [
-              {
-                index: true,
-                lazy: async () => ({
-                  Component: (await import('@/features/reports/dashboard-page')).DashboardPage,
-                }),
-              },
-              {
-                path: 'transaksi',
-                lazy: async () => ({
-                  Component: (await import('@/features/reports/transactions-page'))
-                    .TransactionsPage,
-                }),
-              },
-              {
-                path: 'pengeluaran',
-                lazy: async () => ({
-                  Component: (await import('@/features/expenses/expenses-page')).ExpensesPage,
-                }),
-              },
-              {
-                path: 'cadangan',
-                lazy: async () => ({
-                  Component: (await import('@/features/reserve/reserve-page')).ReservePage,
-                }),
-              },
-              {
-                path: 'katalog',
-                lazy: async () => ({
-                  Component: (await import('@/features/catalog/catalog-page')).CatalogPage,
-                }),
-              },
-              {
-                path: 'pengaturan',
-                lazy: async () => ({
-                  Component: (await import('@/features/business/settings-page')).SettingsPage,
-                }),
-              },
-              {
-                path: 'akun-kasir',
-                lazy: async () => ({
-                  Component: (await import('@/features/auth/cashier-account-page'))
-                    .CashierAccountPage,
-                }),
-              },
-            ],
+            index: true,
+            element: page(() => import('@/features/reports/dashboard-page'), 'DashboardPage'),
+          },
+          {
+            path: 'transaksi',
+            element: page(() => import('@/features/reports/transactions-page'), 'TransactionsPage'),
+          },
+          {
+            path: 'pengeluaran',
+            element: page(() => import('@/features/expenses/expenses-page'), 'ExpensesPage'),
+          },
+          {
+            path: 'cadangan',
+            element: page(() => import('@/features/reserve/reserve-page'), 'ReservePage'),
+          },
+          {
+            path: 'katalog',
+            element: page(() => import('@/features/catalog/catalog-page'), 'CatalogPage'),
+          },
+          {
+            path: 'pengaturan',
+            element: page(() => import('@/features/business/settings-page'), 'SettingsPage'),
+          },
+          {
+            path: 'akun-kasir',
+            element: page(
+              () => import('@/features/auth/cashier-account-page'),
+              'CashierAccountPage',
+            ),
           },
         ],
       },

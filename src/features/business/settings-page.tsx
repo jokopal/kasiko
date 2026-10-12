@@ -248,6 +248,7 @@ function ReceiptPreview({ business }: { business: Business }) {
     voidReason: null,
     voidedAt: null,
     deviceId: 'preview',
+    receivedAt: null,
     items: [
       {
         id: '1',

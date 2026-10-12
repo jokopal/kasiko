@@ -64,6 +64,8 @@ export interface Transaction {
   voidReason: string | null
   voidedAt: string | null
   deviceId: string
+  /** Set by the server on arrival (decision #17); null while only in the device outbox. */
+  receivedAt: string | null
   items: TransactionItem[]
 }
 
@@ -86,6 +88,8 @@ export interface Expense {
   status: ExpenseStatus
   voidReason: string | null
   voidedAt: string | null
+  /** Set by the server on arrival; null while only in the device outbox. */
+  receivedAt: string | null
 }
 
 export interface ReserveMovement {

@@ -10,7 +10,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { createTransaction } from '@/features/preview/actions'
 import { ReceiptActions } from '@/features/receipt/receipt-actions'
 import { formatRupiah } from '@/lib/money'
 import {
@@ -21,7 +20,9 @@ import {
   type Transaction,
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { recordSale } from './commands'
 import { useCart } from './use-cart'
+import { useKasirData } from './use-kasir-data'
 import { computeChange, quickCashOptions } from './payment'
 
 const MAX_CASH_DIGITS = 10
@@ -29,10 +30,10 @@ const MAX_CASH_DIGITS = 10
 interface PaymentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  business: Business
 }
 
-export function PaymentDialog({ open, onOpenChange, business }: PaymentDialogProps) {
+export function PaymentDialog({ open, onOpenChange }: PaymentDialogProps) {
+  const { business } = useKasirData()
   const [saved, setSaved] = useState<Transaction | null>(null)
   const { reset } = useCart()
 
@@ -54,21 +55,17 @@ export function PaymentDialog({ open, onOpenChange, business }: PaymentDialogPro
             onNew={() => handleOpenChange(false)}
           />
         ) : (
-          open && <PaymentForm businessId={business.id} onSaved={setSaved} />
+          open && <PaymentForm onSaved={setSaved} />
         )}
       </DialogContent>
     </Dialog>
   )
 }
 
-function PaymentForm({
-  businessId,
-  onSaved,
-}: {
-  businessId: string
-  onSaved: (transaction: Transaction) => void
-}) {
+function PaymentForm({ onSaved }: { onSaved: (transaction: Transaction) => void }) {
+  const { business, device } = useKasirData()
   const { lines, total, plateNumber } = useCart()
+  const [saving, setSaving] = useState(false)
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [cash, setCash] = useState<number | null>(null)
   const change = cash === null ? null : computeChange(total, cash)
@@ -88,17 +85,26 @@ function PaymentForm({
     })
   }
 
-  function save() {
-    if (!canSave) return
-    const result = createTransaction({
-      businessId,
-      lines,
-      method,
-      cashReceived: method === 'cash' ? cash : null,
-      plateNumber,
-    })
-    if (result.ok) onSaved(result.value)
-    else toast.error(result.error)
+  async function save() {
+    // `saving` blocks a double tap from recording the sale twice.
+    if (!canSave || saving) return
+    setSaving(true)
+    try {
+      const result = await recordSale({
+        business,
+        device,
+        lines,
+        method,
+        cashReceived: method === 'cash' ? cash : null,
+        plateNumber,
+      })
+      if (result.ok) onSaved(result.value)
+      else toast.error(result.error)
+    } catch {
+      toast.error('Gagal menyimpan di perangkat. Coba lagi.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   // Physical keyboard support for laptops: digits, Backspace, Enter.
@@ -106,7 +112,7 @@ function PaymentForm({
     if (method !== 'cash' || event.target instanceof HTMLTextAreaElement) return
     if (/^\d$/.test(event.key)) pressDigit(event.key)
     else if (event.key === 'Backspace') backspace()
-    else if (event.key === 'Enter') save()
+    else if (event.key === 'Enter') void save()
     else return
     event.preventDefault()
   }
@@ -217,7 +223,12 @@ function PaymentForm({
         </div>
       )}
 
-      <Button size="lg" className="h-14 text-lg font-semibold" disabled={!canSave} onClick={save}>
+      <Button
+        size="lg"
+        className="h-14 text-lg font-semibold"
+        disabled={!canSave || saving}
+        onClick={() => void save()}
+      >
         {method === 'cash' ? 'Simpan' : 'Sudah dibayar — Simpan'}
       </Button>
     </div>

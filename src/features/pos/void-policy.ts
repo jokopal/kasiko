@@ -32,3 +32,21 @@ export function checkVoid(input: VoidCheckInput): VoidCheck {
   }
   return { ok: true, reason }
 }
+
+/**
+ * Device clocks are trusted only within these bounds (decisions #17/#18): an offline
+ * record may arrive days later, but a timestamp from the future means a wrong clock.
+ */
+export const CLIENT_CLOCK_TOLERANCE = {
+  maxFutureMs: 5 * 60_000,
+  maxPastMs: 72 * 60 * 60_000,
+} as const
+
+export function isPlausibleClientTime(
+  clientTime: Date,
+  serverNow: Date,
+  tolerance: { maxFutureMs: number; maxPastMs: number } = CLIENT_CLOCK_TOLERANCE,
+): boolean {
+  const delta = clientTime.getTime() - serverNow.getTime()
+  return delta <= tolerance.maxFutureMs && -delta <= tolerance.maxPastMs
+}

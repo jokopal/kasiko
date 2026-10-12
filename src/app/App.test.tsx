@@ -1,9 +1,10 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { signInPreview, signOut } from '@/features/auth/session'
+import { db } from '@/features/offline/db'
 import { getPreviewState, resetPreviewState } from '@/features/preview/store'
 import { routes } from './router'
 
@@ -17,10 +18,11 @@ function renderAt(path: string) {
   return router
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   localStorage.clear()
   signOut()
   resetPreviewState()
+  await Promise.all(db.tables.map((table) => table.clear()))
 })
 
 describe('routing & roles', () => {
@@ -32,8 +34,7 @@ describe('routing & roles', () => {
   it('keeps a cashier out of the owner area', async () => {
     signInPreview('cashier')
     const router = renderAt('/owner')
-    await screen.findAllByRole('button', { name: /bayar/i })
-    expect(router.state.location.pathname).toBe('/kasir')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/kasir'))
   })
 
   it('shows a 404 page for unknown paths', async () => {
@@ -50,7 +51,13 @@ describe('cashier flow', () => {
 
     const before = getPreviewState().transactions.length
     // 1. pick an item
-    await user.click(await screen.findByRole('button', { name: /^Cuci Mobil Kecil, Rp 35\.000/ }))
+    await user.click(
+      await screen.findByRole(
+        'button',
+        { name: /^Cuci Mobil Kecil, Rp 35\.000/ },
+        { timeout: 5_000 },
+      ),
+    )
     // 2. Bayar (the tablet cart and the phone bar both render in jsdom)
     const [pay] = screen.getAllByRole('button', { name: /^bayar$/i })
     await user.click(pay!)
@@ -60,11 +67,14 @@ describe('cashier flow', () => {
     await user.click(within(dialog).getByRole('button', { name: /^simpan$/i }))
 
     expect(await screen.findByText(/transaksi tersimpan/i)).toBeInTheDocument()
-    const state = getPreviewState()
-    expect(state.transactions).toHaveLength(before + 1)
-    const saved = state.transactions.at(-1)!
+    // Saved to the device outbox first, then delivered by the sync engine.
+    await waitFor(() => expect(getPreviewState().transactions).toHaveLength(before + 1))
+    expect(await db.outbox.count()).toBe(0)
+    const saved = getPreviewState().transactions.at(-1)!
     expect(saved).toMatchObject({ total: 35_000, cashReceived: 35_000, changeAmount: 0 })
-    expect(saved.receiptNo).toMatch(/^SMR-\d{6}-A\d{4}$/)
+    // 'A' belongs to the seeded history device; this device was registered as 'B'.
+    expect(saved.receiptNo).toMatch(/^SMR-\d{6}-B0001$/)
+    expect(saved.receivedAt).not.toBeNull()
     expect(saved.items[0]).toMatchObject({
       nameSnapshot: 'Cuci Mobil Kecil',
       priceSnapshot: 35_000,
@@ -75,7 +85,13 @@ describe('cashier flow', () => {
     const user = userEvent.setup()
     signInPreview('cashier')
     renderAt('/kasir')
-    await user.click(await screen.findByRole('button', { name: /^Cuci Mobil Kecil, Rp 35\.000/ }))
+    await user.click(
+      await screen.findByRole(
+        'button',
+        { name: /^Cuci Mobil Kecil, Rp 35\.000/ },
+        { timeout: 5_000 },
+      ),
+    )
     await user.click(screen.getAllByRole('button', { name: /^bayar$/i })[0]!)
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: '2' }))
@@ -89,7 +105,10 @@ describe('owner area', () => {
   it('renders the dashboard for the owner', async () => {
     signInPreview('owner')
     renderAt('/owner')
-    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument()
+    // Layout and page chunks load on first render (React.lazy); recharts is heavy in jsdom.
+    expect(
+      await screen.findByRole('heading', { name: 'Dashboard' }, { timeout: 5_000 }),
+    ).toBeInTheDocument()
     expect(screen.getByText('Kas bebas')).toBeInTheDocument()
   })
 })

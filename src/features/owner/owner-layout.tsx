@@ -1,7 +1,9 @@
 import { CheckIcon, ChevronsUpDownIcon, LogOutIcon, PlusIcon, WifiOffIcon } from 'lucide-react'
+import { Suspense } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { BusinessLogo } from '@/components/business-logo'
+import { PageLoading } from '@/components/page-loading'
 import { PreviewBanner } from '@/components/preview-banner'
 import {
   DropdownMenu,
@@ -65,7 +67,9 @@ export function OwnerLayout() {
           </span>
         </header>
         {online ? (
-          <Outlet />
+          <Suspense fallback={<PageLoading />}>
+            <Outlet />
+          </Suspense>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
             <WifiOffIcon className="size-10 text-muted-foreground" aria-hidden />

@@ -1,21 +1,22 @@
 import { BanknoteIcon, LandmarkIcon, QrCodeIcon } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { useBusinessData } from '@/features/preview/selectors'
 import { drawerExpected, periodTotals } from '@/features/reports/finance'
-import { businessDayRange, formatLongDate, isInRange } from '@/lib/datetime'
+import { businessDayRange, formatLongDate } from '@/lib/datetime'
 import { formatRupiah } from '@/lib/money'
+import { useKasirData } from './use-kasir-data'
 
 export function SummaryPage() {
-  const { business, transactions, expenses } = useBusinessData()
+  const kasir = useKasirData()
+  const { business } = kasir
   const tz = business.timezone
   const today = businessDayRange(new Date(), tz)
+  // Includes sales still in the outbox, so the drawer figure is right while offline.
   // The cashier only sees drawer expenses; owner expenses never touch the drawer.
-  const drawerExpenses = expenses.filter((e) => e.source === 'drawer')
+  const transactions = kasir.transactions.map((r) => r.row)
+  const drawerExpenses = kasir.expenses.map((r) => r.row)
   const totals = periodTotals(transactions, drawerExpenses, today)
   const drawer = drawerExpected(transactions, drawerExpenses, today)
-  const voidCount = transactions.filter(
-    (t) => t.status === 'void' && isInRange(new Date(t.occurredAt), today),
-  ).length
+  const voidCount = transactions.filter((t) => t.status === 'void').length
 
   const methods = [
     { label: 'Tunai', value: totals.incomeByMethod.cash, icon: BanknoteIcon },

@@ -10,17 +10,17 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { ExpenseDialog } from '@/features/expenses/expense-dialog'
-import { useBusinessData } from '@/features/preview/selectors'
 import { formatRupiah } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { useCart } from './use-cart'
+import { useKasirData } from './use-kasir-data'
 import { CartPanel } from './cart-panel'
 import { PaymentDialog } from './payment-dialog'
 
 const ALL = 'all'
 
 export function PosPage() {
-  const { business, catalogCategories, catalogItems, expenseCategories } = useBusinessData()
+  const { business, catalogCategories, catalogItems, expenseCategories } = useKasirData()
   const { lines, total, quantity, dispatch } = useCart()
   const [categoryId, setCategoryId] = useState<string>(ALL)
   const [cartOpen, setCartOpen] = useState(false)
@@ -173,7 +173,7 @@ export function PosPage() {
         </SheetContent>
       </Sheet>
 
-      <PaymentDialog open={payOpen} onOpenChange={setPayOpen} business={business} />
+      <PaymentDialog open={payOpen} onOpenChange={setPayOpen} />
       <ExpenseDialog
         open={expenseOpen}
         onOpenChange={setExpenseOpen}
