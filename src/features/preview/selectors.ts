@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useSession } from '@/features/auth/session'
 import { bySortOrder } from '@/lib/ordering'
+import type { BusinessConfig } from '@/features/business/config'
 import type { Business } from '@/lib/types'
 import type { PreviewState } from './seed'
 import { usePreviewState } from './store'
@@ -17,11 +18,16 @@ export function selectBusinessData(state: PreviewState, businessId: string) {
     transactions: mine(state.transactions),
     expenses: mine(state.expenses),
     reserveMovements: mine(state.reserveMovements),
+    historicalDays: mine(state.historicalDays),
+    config: state.businessConfigs.find((c) => c.businessId === businessId),
     cashierAccount: state.cashierAccounts.find((a) => a.businessId === businessId),
   }
 }
 
-export type BusinessData = ReturnType<typeof selectBusinessData> & { business: Business }
+export type BusinessData = ReturnType<typeof selectBusinessData> & {
+  business: Business
+  config: BusinessConfig
+}
 
 /** Data for the business in the current session. Only call below a role guard. */
 export function useBusinessData(): BusinessData {
@@ -29,6 +35,6 @@ export function useBusinessData(): BusinessData {
   const state = usePreviewState()
   const businessId = session?.businessId ?? ''
   const data = useMemo(() => selectBusinessData(state, businessId), [state, businessId])
-  if (!data.business) throw new Error(`Usaha ${businessId} tidak ditemukan`)
+  if (!data.business || !data.config) throw new Error(`Usaha ${businessId} tidak ditemukan`)
   return data as BusinessData
 }

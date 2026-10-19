@@ -10,20 +10,36 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldTitle,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { recordDrawerExpense } from '@/features/pos/commands'
+import { isDrawerCategory, recordDrawerExpense } from '@/features/pos/commands'
 import { createOwnerExpense } from '@/features/preview/actions'
 import { formatRupiah } from '@/lib/money'
 import { fail } from '@/lib/result'
-import type { ExpenseCategory, ExpenseSource } from '@/lib/types'
+import {
+  EXPENSE_KIND_LABEL,
+  EXPENSE_KINDS,
+  type ExpenseCategory,
+  type ExpenseSource,
+} from '@/lib/types'
+import { cn } from '@/lib/utils'
+import { KindDot } from './kind'
 
 interface ExpenseDialogProps {
   open: boolean
@@ -46,7 +62,7 @@ export function ExpenseDialog(props: ExpenseDialogProps) {
           <DialogDescription>
             {source === 'drawer'
               ? 'Uang yang diambil dari laci kasir hari ini.'
-              : 'Pengeluaran besar (gaji, sewa, listrik). Tidak mengurangi uang laci.'}
+              : 'Pengeluaran yang dibayar owner langsung (gaji bulanan, cicilan, sewa). Tidak mengurangi uang laci.'}
           </DialogDescription>
         </DialogHeader>
         {open && <ExpenseForm {...props} onDone={() => onOpenChange(false)} />}
@@ -61,13 +77,14 @@ function ExpenseForm({
   source,
   onDone,
 }: ExpenseDialogProps & { onDone: () => void }) {
-  const active = categories.filter((c) => c.isActive)
+  // The cashier only sees what the owner allows for the drawer (decision #26).
+  const active = categories.filter((c) => (source === 'drawer' ? isDrawerCategory(c) : c.isActive))
   const [amount, setAmount] = useState<number | null>(null)
   const [categoryId, setCategoryId] = useState('')
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
-
   const [saving, setSaving] = useState(false)
+  const selectedKind = active.find((c) => c.id === categoryId)?.kind
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -103,21 +120,66 @@ function ExpenseForm({
             autoFocus
           />
         </Field>
-        <Field>
-          <FieldLabel htmlFor="expense-category">Kategori</FieldLabel>
-          <Select value={categoryId} onValueChange={setCategoryId}>
-            <SelectTrigger id="expense-category" className="h-11 w-full">
-              <SelectValue placeholder="Pilih kategori" />
-            </SelectTrigger>
-            <SelectContent>
+        {source === 'drawer' ? (
+          <Field>
+            <FieldTitle id="expense-category-label">Kategori</FieldTitle>
+            <div
+              role="radiogroup"
+              aria-labelledby="expense-category-label"
+              className="grid max-h-56 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3"
+            >
               {active.map((category) => (
-                <SelectItem key={category.id} value={category.id}>
+                <button
+                  key={category.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={categoryId === category.id}
+                  onClick={() => setCategoryId(category.id)}
+                  className={cn(
+                    'min-h-11 rounded-lg border px-2 py-2 text-left text-sm leading-tight font-medium transition-colors',
+                    'focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
+                    categoryId === category.id
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'hover:bg-muted',
+                  )}
+                >
                   {category.name}
-                </SelectItem>
+                </button>
               ))}
-            </SelectContent>
-          </Select>
-        </Field>
+            </div>
+          </Field>
+        ) : (
+          <Field>
+            <FieldLabel htmlFor="expense-category">Kategori</FieldLabel>
+            <Select value={categoryId} onValueChange={setCategoryId}>
+              <SelectTrigger id="expense-category" className="h-11 w-full">
+                <SelectValue placeholder="Pilih kategori" />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPENSE_KINDS.map((kind) => {
+                  const group = active.filter((c) => c.kind === kind)
+                  if (group.length === 0) return null
+                  return (
+                    <SelectGroup key={kind}>
+                      <SelectLabel className="flex items-center gap-1.5">
+                        <KindDot kind={kind} />
+                        {EXPENSE_KIND_LABEL[kind]}
+                      </SelectLabel>
+                      {group.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )
+                })}
+              </SelectContent>
+            </Select>
+            {selectedKind === 'drawing' && (
+              <FieldDescription>Prive tidak mengurangi profit, hanya kas.</FieldDescription>
+            )}
+          </Field>
+        )}
         <Field>
           <FieldLabel htmlFor="expense-note">Catatan</FieldLabel>
           <Input

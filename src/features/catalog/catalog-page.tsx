@@ -28,10 +28,9 @@ import {
   moveCatalogItem,
   moveCategory,
   saveCatalogItem,
-  saveCategory,
+  saveCatalogCategory,
   setCatalogItemActive,
   setCategoryActive,
-  type CategoryKind,
 } from '@/features/preview/actions'
 import { useBusinessData } from '@/features/preview/selectors'
 import { formatRupiah } from '@/lib/money'
@@ -41,7 +40,7 @@ import { cn } from '@/lib/utils'
 type ItemDraft = { id?: string; name: string; price: number | null; categoryId: string }
 
 export function CatalogPage() {
-  const { business, catalogCategories, catalogItems, expenseCategories } = useBusinessData()
+  const { business, catalogCategories, catalogItems } = useBusinessData()
   const [itemDraft, setItemDraft] = useState<ItemDraft | null>(null)
 
   return (
@@ -53,7 +52,6 @@ export function CatalogPage() {
         <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
           <TabsTrigger value="items">Layanan</TabsTrigger>
           <TabsTrigger value="categories">Kategori layanan</TabsTrigger>
-          <TabsTrigger value="expense">Kategori pengeluaran</TabsTrigger>
         </TabsList>
 
         <TabsContent value="items" className="mt-4 space-y-4">
@@ -112,10 +110,7 @@ export function CatalogPage() {
         </TabsContent>
 
         <TabsContent value="categories" className="mt-4">
-          <CategoryEditor kind="catalog" businessId={business.id} rows={catalogCategories} />
-        </TabsContent>
-        <TabsContent value="expense" className="mt-4">
-          <CategoryEditor kind="expense" businessId={business.id} rows={expenseCategories} />
+          <CategoryEditor businessId={business.id} rows={catalogCategories} />
         </TabsContent>
       </Tabs>
 
@@ -293,11 +288,9 @@ function ItemForm({
 }
 
 function CategoryEditor({
-  kind,
   businessId,
   rows,
 }: {
-  kind: CategoryKind
   businessId: string
   rows: { id: string; name: string; isActive: boolean }[]
 }) {
@@ -307,7 +300,7 @@ function CategoryEditor({
   function submit(event: FormEvent) {
     event.preventDefault()
     if (!editing) return
-    const result = saveCategory(kind, { id: editing.id, businessId, name: editing.name })
+    const result = saveCatalogCategory({ id: editing.id, businessId, name: editing.name })
     if (!result.ok) {
       setError(result.error)
       return
@@ -319,9 +312,7 @@ function CategoryEditor({
   return (
     <Card className="gap-0 py-0">
       <CardHeader className="flex flex-row items-center border-b py-3">
-        <CardTitle className="text-base">
-          {kind === 'catalog' ? 'Kategori layanan' : 'Kategori pengeluaran'}
-        </CardTitle>
+        <CardTitle className="text-base">Kategori layanan</CardTitle>
         <Button size="sm" className="ml-auto" onClick={() => setEditing({ name: '' })}>
           <PlusIcon />
           Tambah
@@ -343,7 +334,7 @@ function CategoryEditor({
                 id={row.id}
                 isFirst={index === 0}
                 isLast={index === rows.length - 1}
-                onMove={(id, direction) => moveCategory(kind, id, direction)}
+                onMove={(id, direction) => moveCategory('catalog', id, direction)}
               />
               <Button
                 variant="ghost"
@@ -356,7 +347,7 @@ function CategoryEditor({
               </Button>
               <Switch
                 checked={row.isActive}
-                onCheckedChange={(checked) => setCategoryActive(kind, row.id, checked)}
+                onCheckedChange={(checked) => setCategoryActive('catalog', row.id, checked)}
                 aria-label={`${row.name} aktif`}
               />
             </li>

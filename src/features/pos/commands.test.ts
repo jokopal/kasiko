@@ -85,9 +85,19 @@ describe('requestVoid', () => {
 })
 
 describe('recordDrawerExpense', () => {
+  const drawer = { kind: 'operating', allowDrawer: true } as const
   const categories: ExpenseCategory[] = [
-    { id: 'c1', businessId: 'biz', name: 'Bahan', sortOrder: 0, isActive: true },
-    { id: 'c2', businessId: 'biz', name: 'Lama', sortOrder: 1, isActive: false },
+    { id: 'c1', businessId: 'biz', name: 'Bahan', sortOrder: 0, isActive: true, ...drawer },
+    { id: 'c2', businessId: 'biz', name: 'Lama', sortOrder: 1, isActive: false, ...drawer },
+    {
+      id: 'c3',
+      businessId: 'biz',
+      name: 'Cicilan',
+      sortOrder: 2,
+      isActive: true,
+      kind: 'non_operating',
+      allowDrawer: false,
+    },
   ]
 
   it('queues a drawer expense', async () => {
@@ -105,5 +115,10 @@ describe('recordDrawerExpense', () => {
     const base = { businessId: 'biz', categories, note: '' }
     expect((await recordDrawerExpense({ ...base, categoryId: 'c2', amount: 1 })).ok).toBe(false)
     expect((await recordDrawerExpense({ ...base, categoryId: 'c1', amount: 0 })).ok).toBe(false)
+  })
+
+  it('rejects categories the owner keeps off the cashier screen', async () => {
+    const base = { businessId: 'biz', categories, note: '', amount: 10_000 }
+    expect((await recordDrawerExpense({ ...base, categoryId: 'c3' })).ok).toBe(false)
   })
 })

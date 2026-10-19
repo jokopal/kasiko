@@ -8,6 +8,12 @@ export type ExpenseSource = 'drawer' | 'owner'
 export type ExpenseStatus = 'active' | 'void'
 export type ReserveMovementType = 'deposit' | 'withdraw'
 export type ReserveDepositSource = 'cash' | 'capital'
+/**
+ * How an expense category counts in the profit tiers (decision #24):
+ * operating → operating profit; non_operating (loan installments, assets) → net profit;
+ * drawing (owner/family withdrawals) never reduces profit, only free cash.
+ */
+export type ExpenseKind = 'operating' | 'non_operating' | 'drawing'
 
 export interface Business {
   id: string
@@ -75,6 +81,9 @@ export interface ExpenseCategory {
   name: string
   sortOrder: number
   isActive: boolean
+  kind: ExpenseKind
+  /** Shown on the cashier screen, i.e. may be paid from the drawer (decision #26). */
+  allowDrawer: boolean
 }
 
 export interface Expense {
@@ -104,6 +113,16 @@ export interface ReserveMovement {
   occurredAt: string
 }
 
+/** Imported day from a spreadsheet: analysis only, never touches cash (decision #27). */
+export interface HistoricalDay {
+  businessId: string
+  /** YYYY-MM-DD in the business timezone. */
+  dayKey: string
+  income: number
+  expenses: { categoryId: string; amount: number }[]
+  importedAt: string
+}
+
 export const PAYMENT_METHODS: readonly PaymentMethod[] = ['cash', 'qris', 'transfer']
 
 export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
@@ -115,4 +134,18 @@ export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
 export const EXPENSE_SOURCE_LABEL: Record<ExpenseSource, string> = {
   drawer: 'Laci kasir',
   owner: 'Owner',
+}
+
+export const EXPENSE_KINDS: readonly ExpenseKind[] = ['operating', 'non_operating', 'drawing']
+
+export const EXPENSE_KIND_LABEL: Record<ExpenseKind, string> = {
+  operating: 'Operasional',
+  non_operating: 'Non-operasional',
+  drawing: 'Prive',
+}
+
+export const EXPENSE_KIND_HINT: Record<ExpenseKind, string> = {
+  operating: 'Biaya menjalankan usaha sehari-hari. Mengurangi profit operasional.',
+  non_operating: 'Cicilan utang, pembelian aset, renovasi. Mengurangi profit bersih.',
+  drawing: 'Uang diambil owner/keluarga. Tidak mengurangi profit, tetapi mengurangi kas.',
 }

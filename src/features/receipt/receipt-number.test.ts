@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatReceiptNo, MAX_DAILY_SEQUENCE, nextSequence } from './receipt-number'
+import { formatReceiptNo, MAX_DAILY_SEQUENCE, nextSequence, suggestPrefix } from './receipt-number'
 
 describe('formatReceiptNo', () => {
   const base = {
@@ -48,5 +48,13 @@ describe('nextSequence', () => {
 
   it('refuses to overflow', () => {
     expect(() => nextSequence({ dayKey: 'd', seq: MAX_DAILY_SEQUENCE }, 'd')).toThrow(RangeError)
+  })
+})
+
+describe('suggestPrefix', () => {
+  it('uses initials for several words and the first letters of one', () => {
+    expect(suggestPrefix('Cuci Mobil Saimara')).toBe('CMS')
+    expect(suggestPrefix('Saimara')).toBe('SAI')
+    expect(suggestPrefix('  ')).toBe('')
   })
 })

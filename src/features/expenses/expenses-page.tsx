@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { VoidDialog } from '@/components/void-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Select,
   SelectContent,
@@ -27,9 +27,17 @@ import { PeriodPicker } from '@/features/reports/period-picker'
 import { usePeriod } from '@/features/reports/use-period'
 import { formatDateTime, isInRange } from '@/lib/datetime'
 import { formatRupiah, sumRupiah } from '@/lib/money'
-import { EXPENSE_SOURCE_LABEL, type Expense } from '@/lib/types'
+import { kindLookup } from '@/features/reports/finance'
+import {
+  EXPENSE_KIND_LABEL,
+  EXPENSE_KINDS,
+  EXPENSE_SOURCE_LABEL,
+  type Expense,
+  type ExpenseKind,
+} from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { ExpenseDialog } from './expense-dialog'
+import { KindDot } from './kind'
 
 export function ExpensesPage() {
   const { business, expenses, expenseCategories } = useBusinessData()
@@ -38,17 +46,23 @@ export function ExpensesPage() {
   const [source, setSource] = useState('all')
   const [status, setStatus] = useState('active')
   const [categoryId, setCategoryId] = useState('all')
+  const [kind, setKind] = useState('all')
   const [addOpen, setAddOpen] = useState(false)
   const [target, setTarget] = useState<Expense | null>(null)
 
   const categoryName = (id: string) => expenseCategories.find((c) => c.id === id)?.name ?? '—'
+  const kindOf = kindLookup(expenseCategories)
   const rows = expenses
     .filter((e) => isInRange(new Date(e.occurredAt), period.range))
     .filter((e) => source === 'all' || e.source === source)
     .filter((e) => status === 'all' || e.status === status)
     .filter((e) => categoryId === 'all' || e.categoryId === categoryId)
+    .filter((e) => kind === 'all' || kindOf(e.categoryId) === kind)
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
-  const activeTotal = sumRupiah(rows.filter((e) => e.status === 'active').map((e) => e.amount))
+  const activeRows = rows.filter((e) => e.status === 'active')
+  const activeTotal = sumRupiah(activeRows.map((e) => e.amount))
+  const totalOf = (k: ExpenseKind) =>
+    sumRupiah(activeRows.filter((e) => kindOf(e.categoryId) === k).map((e) => e.amount))
 
   return (
     <OwnerPage
@@ -74,6 +88,15 @@ export function ExpensesPage() {
           ]}
         />
         <FilterSelect
+          label="Jenis"
+          value={kind}
+          onChange={setKind}
+          options={[
+            ['all', 'Semua jenis'],
+            ...EXPENSE_KINDS.map((k) => [k, EXPENSE_KIND_LABEL[k]] as [string, string]),
+          ]}
+        />
+        <FilterSelect
           label="Kategori"
           value={categoryId}
           onChange={setCategoryId}
@@ -92,6 +115,20 @@ export function ExpensesPage() {
             ['all', 'Semua status'],
           ]}
         />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {EXPENSE_KINDS.map((k) => (
+          <Card key={k} className="gap-1 py-3">
+            <CardContent className="px-4">
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <KindDot kind={k} />
+                {EXPENSE_KIND_LABEL[k]}
+              </p>
+              <p className="text-lg font-semibold tabular-nums">{formatRupiah(totalOf(k))}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       <Card className="py-0">
@@ -113,7 +150,10 @@ export function ExpensesPage() {
                   {formatDateTime(new Date(e.occurredAt), tz)}
                 </TableCell>
                 <TableCell>
-                  {categoryName(e.categoryId)}
+                  <span className="flex items-center gap-1.5">
+                    <KindDot kind={kindOf(e.categoryId)} />
+                    {categoryName(e.categoryId)}
+                  </span>
                   <span className="block text-xs text-muted-foreground md:hidden">
                     {EXPENSE_SOURCE_LABEL[e.source]}
                   </span>

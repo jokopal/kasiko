@@ -5,18 +5,18 @@ import { createSeedState, type PreviewState } from './seed'
 // shapes the Supabase data layer will return, so screens do not change when it is
 // swapped out. Persisted in localStorage and synced across tabs (kasir + owner side by side).
 
-const STORAGE_KEY = 'kasiko.preview.v2'
+const STORAGE_KEY = 'kasiko.preview.v3'
 
 let state: PreviewState | null = null
 const listeners = new Set<() => void>()
 
 function load(): PreviewState | null {
   try {
-    localStorage.removeItem('kasiko.preview.v1')
+    for (const old of ['kasiko.preview.v1', 'kasiko.preview.v2']) localStorage.removeItem(old)
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<PreviewState>
-    return parsed.version === 2 ? (parsed as PreviewState) : null
+    return parsed.version === 3 ? (parsed as PreviewState) : null
   } catch {
     return null
   }

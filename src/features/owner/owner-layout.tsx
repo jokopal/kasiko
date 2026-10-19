@@ -1,7 +1,6 @@
 import { CheckIcon, ChevronsUpDownIcon, LogOutIcon, PlusIcon, WifiOffIcon } from 'lucide-react'
-import { Suspense } from 'react'
+import { Suspense, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
 import { BusinessLogo } from '@/components/business-logo'
 import { PageLoading } from '@/components/page-loading'
 import { PreviewBanner } from '@/components/preview-banner'
@@ -32,6 +31,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { selectBusiness, signOut } from '@/features/auth/session'
+import { AddBusinessDialog } from '@/features/business/add-business-dialog'
 import { useBrandTheme } from '@/features/business/use-brand-theme'
 import { useOnlineStatus } from '@/features/offline/use-online-status'
 import { useBusinessData } from '@/features/preview/selectors'
@@ -46,6 +46,8 @@ export function OwnerLayout() {
   const { business } = useBusinessData()
   const online = useOnlineStatus()
   const location = useLocation()
+  // Lives outside the sidebar: on phones the sidebar is a sheet that unmounts on close.
+  const [adding, setAdding] = useState(false)
   useBrandTheme(business.primaryColor)
 
   const title =
@@ -54,7 +56,8 @@ export function OwnerLayout() {
 
   return (
     <SidebarProvider defaultOpen={startExpanded()}>
-      <OwnerSidebar current={business} />
+      <OwnerSidebar current={business} onAddBusiness={() => setAdding(true)} />
+      <AddBusinessDialog open={adding} onOpenChange={setAdding} />
       <SidebarInset className="min-w-0">
         <PreviewBanner />
         <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur md:px-4">
@@ -85,7 +88,13 @@ export function OwnerLayout() {
   )
 }
 
-function OwnerSidebar({ current }: { current: Business }) {
+function OwnerSidebar({
+  current,
+  onAddBusiness,
+}: {
+  current: Business
+  onAddBusiness: () => void
+}) {
   const { businesses } = usePreviewState()
   const { isMobile, setOpenMobile } = useSidebar()
   const location = useLocation()
@@ -138,7 +147,10 @@ function OwnerSidebar({ current }: { current: Business }) {
                 ))}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onSelect={() => toast.info('Tambah usaha aktif setelah database tersambung')}
+                  onSelect={() => {
+                    onAddBusiness()
+                    closeOnMobile()
+                  }}
                   className="gap-2 py-2"
                 >
                   <span className="flex size-7 items-center justify-center rounded-lg border">

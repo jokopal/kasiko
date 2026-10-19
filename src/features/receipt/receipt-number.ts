@@ -48,3 +48,14 @@ export function formatReceiptNo(input: ReceiptNumberInput): string {
   }
   return `${prefix}-${yymmdd(occurredAt, timeZone)}-${deviceCode}${String(seq).padStart(4, '0')}`
 }
+
+/** `"Cuci Mobil Saimara"` → `"CMS"`: initials, or the first letters of a single word. */
+export function suggestPrefix(name: string): string {
+  const words = name
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, '')
+    .split(' ')
+    .filter(Boolean)
+  const raw = words.length > 1 ? words.map((w) => w[0]).join('') : (words[0] ?? '').slice(0, 3)
+  return raw.slice(0, 6)
+}

@@ -62,6 +62,10 @@ export const routes: RouteObject[] = [
             element: page(() => import('@/features/reports/dashboard-page'), 'DashboardPage'),
           },
           {
+            path: 'rekap',
+            element: page(() => import('@/features/reports/monthly-page'), 'MonthlyPage'),
+          },
+          {
             path: 'transaksi',
             element: page(() => import('@/features/reports/transactions-page'), 'TransactionsPage'),
           },
@@ -74,8 +78,19 @@ export const routes: RouteObject[] = [
             element: page(() => import('@/features/reserve/reserve-page'), 'ReservePage'),
           },
           {
+            path: 'impor',
+            element: page(() => import('@/features/history/import-page'), 'ImportPage'),
+          },
+          {
             path: 'katalog',
             element: page(() => import('@/features/catalog/catalog-page'), 'CatalogPage'),
+          },
+          {
+            path: 'kategori-pengeluaran',
+            element: page(
+              () => import('@/features/expenses/expense-categories-page'),
+              'ExpenseCategoriesPage',
+            ),
           },
           {
             path: 'pengaturan',

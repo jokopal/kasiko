@@ -164,6 +164,9 @@ export function rpcCreateExpense(record: Expense, role: Role, now = new Date()):
     (c) => c.id === record.categoryId && c.businessId === record.businessId && c.isActive,
   )
   if (!category) return fail('Kategori pengeluaran tidak valid')
+  if (role === 'cashier' && !category.allowDrawer) {
+    return fail('Kategori ini tidak boleh dicatat dari laci kasir')
+  }
 
   const stored: Expense = { ...record, note: record.note.trim(), receivedAt: now.toISOString() }
   setPreviewState((s) => ({ ...s, expenses: [...s.expenses, stored] }))

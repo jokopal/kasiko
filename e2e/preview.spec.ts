@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import * as XLSX from 'xlsx'
 
 // Screenshots land in test-results/screens/<device>-*.png for visual review.
 async function snap(page: Page, name: string) {
@@ -51,11 +52,15 @@ test('owner sees the dashboard and every page loads', async ({ page }) => {
   await expect(page.getByText('Tren harian')).toBeVisible()
   await snap(page, 'owner-dashboard')
 
+  await expect(page.getByText('Alur profit')).toBeVisible()
   const pages = [
+    ['/owner/rekap', 'Rekap Bulanan'],
     ['/owner/transaksi', 'Transaksi'],
     ['/owner/pengeluaran', 'Pengeluaran'],
     ['/owner/cadangan', 'Dana Cadangan'],
+    ['/owner/impor', 'Impor Data'],
     ['/owner/katalog', 'Katalog'],
+    ['/owner/kategori-pengeluaran', 'Kategori Pengeluaran'],
     ['/owner/pengaturan', 'Pengaturan Usaha'],
     ['/owner/akun-kasir', 'Akun Kasir'],
   ] as const
@@ -198,4 +203,96 @@ test('a cashier opening /owner is redirected without downloading owner code', as
   await expect(page).toHaveURL(/\/kasir$/)
   await expect(page.getByRole('button', { name: /^Cuci Motor, Rp 15\.000/ })).toBeVisible()
   expect(ownerChunks).toEqual([])
+})
+
+test('cashier sees only the expense categories the owner allows for the drawer', async ({
+  page,
+}) => {
+  await enterAs(page, 'Kasir')
+  await page.getByRole('button', { name: 'Catat pengeluaran' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Pengeluaran laci' })
+  await expect(dialog.getByRole('radio', { name: 'Makan & Konsumsi' })).toBeVisible()
+  // Owner-only by template: loan installments never appear at the cashier.
+  await expect(dialog.getByRole('radio', { name: 'Cicilan & Utang' })).toHaveCount(0)
+  await dialog.getByLabel('Nominal').fill('45000')
+  await dialog.getByRole('radio', { name: 'Makan & Konsumsi' }).click()
+  await snap(page, 'kasir-expense')
+  await dialog.getByRole('button', { name: 'Simpan' }).click()
+  await expect(page.getByText('Pengeluaran Rp 45.000 tersimpan')).toBeVisible()
+})
+
+test('owner customizes the dashboard per business', async ({ page }) => {
+  await enterAs(page, 'Owner')
+  await expect(page.getByText('Jam & hari tersibuk')).toBeVisible()
+  await page.getByRole('button', { name: 'Sesuaikan' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Sesuaikan dashboard' })
+  await sheet.getByRole('switch', { name: 'Tampilkan Jam & hari tersibuk' }).click()
+  await snap(page, 'owner-customize')
+  await page.keyboard.press('Escape')
+  await expect(page.getByText('Jam & hari tersibuk')).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByText('Alur profit')).toBeVisible()
+  await expect(page.getByText('Jam & hari tersibuk')).toHaveCount(0)
+})
+
+test('owner imports a cash-flow workbook and sees it in the monthly recap', async ({ page }) => {
+  test.slow()
+  // A synthetic workbook in the monthly cash-flow layout (no real business data).
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(
+    workbook,
+    XLSX.utils.aoa_to_sheet([
+      ['JANUARI', null, 1, 2],
+      ['Pendapatan', null, 2_000_000, 1_800_000],
+      ['Pengeluaran', 'Gaji', 700_000, 630_000],
+      [null, 'Cicilan Mandiri', null, 4_800_000],
+      [null, 'Biaya misterius', 15_000],
+      [null, 'Pendapatan Harian'],
+    ]),
+    'JAN-25',
+  )
+  const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+
+  await enterAs(page, 'Owner')
+  await page.goto('/owner/impor')
+  await page.locator('#cashflow-file').setInputFiles({
+    name: 'arus-kas.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer,
+  })
+  await expect(page.getByText('2. Periksa isi file')).toBeVisible()
+  // An unknown label is not imported until the owner picks a category for it.
+  await expect(page.getByText('Belum dikenali')).toBeVisible()
+  await expect(page.getByText('Rp 15.000 tidak diimpor')).toBeVisible()
+  await snap(page, 'owner-import')
+  await page.getByRole('button', { name: /^Impor 2 hari/ }).click()
+  await expect(page.getByText('2 hari data historis diimpor')).toBeVisible()
+
+  await page.goto('/owner/rekap?bulan=2025-01')
+  await expect(page.getByRole('heading', { name: 'Rekap Bulanan', level: 1 })).toBeVisible()
+  const table = page.getByRole('table')
+  await expect(table.getByRole('rowheader', { name: 'Cicilan & Utang' })).toBeVisible()
+  await expect(table.getByText('3.800.000').first()).toBeVisible() // omset
+  await snap(page, 'owner-rekap')
+})
+
+test('owner adds a business from a template', async ({ page }) => {
+  await enterAs(page, 'Owner')
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
+  const sidebarToggle = page.getByRole('button', { name: 'Toggle Sidebar' }).first()
+  if (test.info().project.name !== 'desktop') await sidebarToggle.click()
+  await page
+    .getByRole('button', { name: /Saimara/ })
+    .first()
+    .click()
+  await page.getByRole('menuitem', { name: 'Tambah usaha' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Tambah usaha' })
+  await dialog.getByLabel('Nama usaha').fill('Cuci Cabang Dua')
+  await expect(dialog.getByLabel('Prefix nota')).toHaveValue('CCD')
+  await dialog.getByRole('radio', { name: /Cuci Mobil/ }).check()
+  await dialog.getByRole('button', { name: 'Buat usaha' }).click()
+  await expect(page.getByText('Cuci Cabang Dua dibuat')).toBeVisible()
+  await page.goto('/owner/kategori-pengeluaran')
+  await expect(page.getByText('Gaji Harian (Komisi)')).toBeVisible()
+  await expect(page.locator('header').getByText('Cuci Cabang Dua')).toBeVisible()
 })

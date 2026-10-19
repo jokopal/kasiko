@@ -36,3 +36,10 @@ supabase/.temp
 coverage
 playwright-report
 test-results
+
+# Owner business data (never commit)
+*.xlsx
+*.xls
+
+# Supabase credentials (never commit)
+supabase se.txt

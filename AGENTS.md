@@ -57,6 +57,16 @@ Rumus inti: **Profit = Pemasukan − Pengeluaran** (transaksi/pengeluaran yang d
 | 22 | Akun | Pendaftaran publik **dimatikan** (`enable_signup = false`, password ≥ 8 huruf+angka). Owner pertama dibuat lewat skrip *bootstrap*. Reset/nonaktif akun kasir mencabut semua sesi. |
 | 23 | Mode pratinjau | Selama database belum dibuat, `src/features/preview/` menjadi pengganti data sementara (localStorage, sinkron antar-tab) dengan bentuk data yang sama. Validasi memakai fungsi murni yang sama dengan yang akan dipakai RPC. **Dihapus saat lapisan Supabase dibangun.** |
 
+### Keputusan tambahan — 2026-10-19 (owner menyetujui hasil audit Excel "Saimara Cash Flow")
+
+| # | Topik | Keputusan |
+|---|-------|-----------|
+| 24 | Jenis pengeluaran & profit | Setiap kategori pengeluaran punya `kind`: **operating** (operasional), **non_operating** (cicilan utang, aset/renovasi), **drawing** (prive owner/keluarga). Profit operasional = Pemasukan − operasional; **Profit bersih = Profit operasional − non-operasional**; **prive tidak mengurangi profit** tetapi tetap mengurangi kas bebas; Arus kas bersih = Pemasukan − semua pengeluaran (= "Total Net Profit" di Excel lama). Menggantikan rumus inti bagian 1 untuk kategori non-operasional/prive. |
+| 25 | Templateable per usaha | Usaha dibuat dari **template** (`src/features/business/templates.ts`: katalog, kategori pengeluaran + jenis + izin kasir, tata letak dashboard, alias label impor). Menerapkan template hanya **menambah yang belum ada**, tidak pernah mengubah/menghapus. Konfigurasi owner per usaha (`business_configs`): template asal, tata letak dashboard (KPI & panel, urutan, tampil/sembunyi), pemetaan label impor. Owner dibagi tiga area: **Monitor** (dashboard, rekap bulanan, transaksi), **Manajemen** (pengeluaran, cadangan, impor), **Admin** (katalog, kategori pengeluaran, pengaturan, akun kasir). Kasir = pintu masuk pemasukan & pengeluaran. |
+| 26 | Kategori di kasir | Kolom `allow_drawer` per kategori: hanya kategori aktif + diizinkan owner yang tampil di kasir; RPC `create_expense` menolak kategori lain untuk kasir. Gaji komisi harian **tetap diisi manual** (tidak dihitung otomatis). "Gratis cuci" = biaya komisi pekerja untuk cuci gratis/promo. |
+| 27 | Data historis (impor Excel) | Tabel `historical_days` (per hari: pendapatan + pengeluaran per kategori) dari impor spreadsheet format arus kas bulanan. **Hanya untuk analisis** (dashboard, tren, rekap): tidak memengaruhi kas bebas, uang laci, atau daftar transaksi. Hari yang sudah punya data kasir dilewati; impor ulang mengganti hari yang sama. File Excel owner **tidak pernah di-commit** (`*.xlsx` di `.gitignore`) dan tidak ada angkanya di kode/seed. |
+| 28 | Rekap bulanan & ekspor | Rekap bulanan berbentuk tabel tanggal × kategori seperti Excel owner; ekspor Excel memakai format yang sama (satu sheet per bulan) sehingga bisa diimpor balik. |
+
 ---
 
 ## 3. Stack Teknis
@@ -81,11 +91,12 @@ src/
   app/            # router, layout, guard peran
   features/
     auth/
-    business/     # pemilih usaha, branding, tema
+    business/     # pemilih usaha, branding, tema, template & konfigurasi per usaha
     catalog/
     pos/          # layar kasir, keranjang, pembayaran
     receipt/      # format nota, ESC/POS, print browser, WhatsApp
-    expenses/
+    expenses/     # pengeluaran, kategori (jenis + izin kasir)
+    history/      # impor spreadsheet arus kas (data historis)
     offline/      # Dexie db, outbox, sync engine
     reports/      # rekap & analisis (lazy)
     reserve/      # dana cadangan
@@ -136,13 +147,22 @@ transaction_items
   -- snapshot wajib: perubahan harga katalog tidak boleh mengubah transaksi lama
 
 expense_categories
-  id, business_id, name, sort_order, is_active
+  id, business_id, name, sort_order, is_active,
+  kind ('operating' | 'non_operating' | 'drawing'),   -- keputusan #24
+  allow_drawer bool                                    -- tampil di kasir, keputusan #26
 
 expenses
   id uuid (DIBUAT DI CLIENT untuk sumber drawer), business_id, category_id,
   amount bigint (> 0), note, source ('drawer' | 'owner'),
   occurred_at, status ('active' | 'void'), void_reason, voided_at, voided_by,
   created_by, device_id
+
+business_configs                                       -- keputusan #25, hanya owner
+  business_id pk, template_id, dashboard jsonb, import_mapping jsonb
+
+historical_days                                        -- keputusan #27, hanya owner
+  business_id, day_key date, income bigint (>= 0),
+  expenses jsonb [{category_id, amount}], imported_at, pk(business_id, day_key)
 
 reserve_movements
   id, business_id, type ('deposit' | 'withdraw'), amount bigint (> 0),
@@ -155,8 +175,11 @@ reserve_movements
 Untuk periode `[from, to)` per usaha, hanya baris `status` aktif/paid:
 
 - **Pemasukan** = Σ `transactions.total`
-- **Pengeluaran** = Σ `expenses.amount` (semua sumber)
-- **Profit** = Pemasukan − Pengeluaran
+- **Pengeluaran** = Σ `expenses.amount` (semua sumber, semua jenis)
+- **Profit operasional** = Pemasukan − Σ pengeluaran `operating`
+- **Profit (bersih)** = Profit operasional − Σ pengeluaran `non_operating` (prive tidak dihitung — keputusan #24)
+- **Arus kas bersih** = Pemasukan − Pengeluaran (semua, termasuk prive)
+- Data historis (keputusan #27) ikut dalam pemasukan/pengeluaran/profit periode, **tidak** dalam kas bebas & uang laci
 - **Saldo cadangan** = Σ deposit − Σ withdraw (sepanjang waktu)
 - **Kas bebas** = `opening_cash` + Σ pemasukan − Σ pengeluaran − Σ deposit(`source='cash'`) + Σ withdraw
   - Deposit `capital` = uang baru dari owner, langsung masuk cadangan (tidak mengurangi kas bebas).
@@ -267,6 +290,7 @@ Kerjakan berurutan; tiap milestone diakhiri tes hijau dan demo singkat ke user.
 6. **Offline:** Dexie, outbox, sync engine, PWA install & update prompt, indikator status.
    *Status 2026-10-12: selesai di sisi perangkat (Dexie outbox FIFO + backoff, registrasi perangkat, cache katalog, PWA prompt/install, logout diblokir saat antrean ada), teruji E2E offline→online. Tinggal mengganti `previewTransport` dengan transport RPC Supabase setelah milestone 1.*
 7. **Rekap & analisis:** fungsi SQL agregasi + dashboard + ekspor.
+   *Status 2026-10-19: di pratinjau sudah ada tingkatan profit, dashboard yang bisa diatur per usaha, rekap bulanan tanggal × kategori, ekspor Excel/CSV format spreadsheet owner, dan impor data historis (teruji dengan file Excel Saimara asli secara lokal: 22 bulan, 608 hari, arus kas cocok sampai rupiah). Fungsi SQL menyusul setelah milestone 1.*
 8. **Dana cadangan & kas bebas** (konfirmasi rumus dengan owner dulu).
 9. **Pengerasan:** E2E Playwright alur kasir (online & offline), audit aksesibilitas dasar, uji di HP Android nyata dengan printer.
 
@@ -292,11 +316,14 @@ Kerjakan berurutan; tiap milestone diakhiri tes hijau dan demo singkat ke user.
 7. **Zona waktu** lokasi Saimara (WIB / WITA / WIT) — menentukan batas "hari ini".
 8. **Proyek Supabase**: sudah punya atau buat baru? (Jangan buat sendiri tanpa izin.)
 9. **Konfirmasi rumus kas bebas** & konsep saldo awal kas (bagian 4).
-10. **Kategori pengeluaran** — asumsi: diatur owner, dengan daftar default di keputusan #6.
+10. ~~**Kategori pengeluaran**~~ — dijawab 2026-10-19: diatur owner per usaha, default dari template (keputusan #24–#26).
 11. **Dana cadangan per usaha** — asumsi: terpisah per usaha (bukan gabungan).
 12. **Modal awal laci & tutup kasir** — rumus "uang laci seharusnya" belum memasukkan uang kembalian awal; belum ada hitung fisik laci/setoran laci ke owner, sehingga selisih uang tidak terdeteksi. Perlu fitur ini?
 13. **Diskon / harga khusus** — keputusan #2 menetapkan harga tetap. Apakah memang tidak pernah ada potongan?
 14. **Lingkungan produksi** — staging terpisah, backup (paket Supabase), SMTP untuk reset password owner, pemantauan error (mis. Sentry).
+15. **Label Excel yang belum jelas** (impor Saimara): "haga" (Rp 14,9 jt, 89 catatan — kasbon/gaji staf?), "Oktober" (Rp 200 rb ×13), "Finance" (gaji staf atau cicilan leasing?), "Kasir titip". Owner memilih kategorinya saat impor; pilihan diingat.
+16. **Upah kasir & driver harian** — diambil dari uang laci? (template mengasumsikan ya: `allow_drawer = true`).
+17. **Olsera** — masih dipakai? Ekspor penjualannya bisa memberi daftar layanan & harga (Pertanyaan #5).
 
 ## 13. Ditunda (bukan cakupan sekarang)
 

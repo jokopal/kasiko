@@ -1,4 +1,4 @@
-import { ImageUpIcon, RotateCcwIcon } from 'lucide-react'
+import { CheckIcon, ImageUpIcon, RotateCcwIcon, TriangleAlertIcon } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { BusinessLogo } from '@/components/business-logo'
@@ -24,15 +24,16 @@ import { ReceiptPaper } from '@/features/receipt/receipt-paper'
 import { isValidReceiptPrefix } from '@/features/receipt/receipt-number'
 import { BUSINESS_TIMEZONES, yymmdd } from '@/lib/datetime'
 import type { Business, Transaction } from '@/lib/types'
-import { isHexColor, readableForeground } from './brand'
+import { brandContrastChecks, isHexColor, readableForeground } from './brand'
+import { TemplateCard } from './template-card'
 
 export function SettingsPage() {
-  const { business } = useBusinessData()
+  const { business, config } = useBusinessData()
   // Re-mount the form when the owner switches business so fields never mix.
-  return <SettingsForm key={business.id} business={business} />
+  return <SettingsForm key={business.id} business={business} templateId={config.templateId} />
 }
 
-function SettingsForm({ business }: { business: Business }) {
+function SettingsForm({ business, templateId }: { business: Business; templateId: string }) {
   const [draft, setDraft] = useState(business)
   const [error, setError] = useState<string | null>(null)
   const set = <K extends keyof Business>(key: K, value: Business[K]) =>
@@ -123,6 +124,7 @@ function SettingsForm({ business }: { business: Business }) {
                     </div>
                   </Field>
                 </div>
+                <ContrastReport color={previewColor} />
                 <Field>
                   <FieldLabel htmlFor="address">Alamat</FieldLabel>
                   <Textarea
@@ -213,6 +215,8 @@ function SettingsForm({ business }: { business: Business }) {
             </CardContent>
           </Card>
 
+          <TemplateCard businessId={business.id} templateId={templateId} />
+
           <Card className="gap-3">
             <CardHeader>
               <CardTitle className="text-base">Data pratinjau</CardTitle>
@@ -276,5 +280,33 @@ function ReceiptPreview({ business }: { business: Business }) {
         className="max-w-full overflow-x-auto p-3 shadow-sm"
       />
     </div>
+  )
+}
+
+/** Live WCAG 2.2 AA report for the brand color, per way the app uses it. */
+function ContrastReport({ color }: { color: string }) {
+  const checks = brandContrastChecks(color)
+  return (
+    <ul className="grid gap-1 rounded-lg border p-3 text-xs" aria-label="Kontras warna (WCAG AA)">
+      {checks.map((check) => (
+        <li key={check.label} className="flex items-center gap-2">
+          {check.pass ? (
+            <CheckIcon className="size-3.5 shrink-0 text-emerald-700" aria-hidden />
+          ) : (
+            <TriangleAlertIcon className="size-3.5 shrink-0 text-amber-600" aria-hidden />
+          )}
+          <span className="min-w-0 flex-1">
+            {check.label}
+            {check.note && <span className="block text-muted-foreground">{check.note}</span>}
+          </span>
+          <span className="tabular-nums">
+            {check.ratio.toFixed(1)}:1{' '}
+            <span className={check.pass ? 'text-muted-foreground' : 'font-medium text-amber-700'}>
+              {check.pass ? 'lolos' : `perlu ≥ ${check.required}:1`}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ul>
   )
 }

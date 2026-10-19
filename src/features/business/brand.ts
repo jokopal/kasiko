@@ -47,5 +47,81 @@ export function brandCssVariables(primaryColor: string): Record<string, string> 
     '--sidebar-primary': primaryColor,
     '--sidebar-primary-foreground': foreground,
     '--chart-1': primaryColor,
+    '--brand-ink': brandInk(primaryColor),
+    '--brand-soft': brandSoft(primaryColor),
   }
+}
+
+function toHex(channels: number[]): string {
+  return `#${channels
+    .map((c) =>
+      Math.round(Math.min(255, Math.max(0, c)))
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`
+}
+
+function channels(hex: string): number[] {
+  if (!isHexColor(hex)) throw new RangeError(`Warna tidak valid: ${hex}`)
+  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+}
+
+/** Linear sRGB mix: `weight` 0 → `a`, 1 → `b`. */
+export function mixColors(a: string, b: string, weight: number): string {
+  const ca = channels(a)
+  const cb = channels(b)
+  return toHex(ca.map((c, i) => c + ((cb[i] ?? c) - c) * weight))
+}
+
+/**
+ * The brand color as text on white: the color itself when it already reaches WCAG AA
+ * (4.5:1), otherwise darkened step by step until it does. Keeps hue, never fails AA.
+ */
+export function brandInk(primaryColor: string): string {
+  for (let step = 0; step <= 20; step++) {
+    const candidate = mixColors(primaryColor, '#000000', step * 0.05)
+    if (contrastRatio(candidate, LIGHT_FOREGROUND) >= 4.5) return candidate
+  }
+  return DARK_FOREGROUND
+}
+
+/** A faint tint of the brand color for selected rows and highlighted surfaces. */
+export function brandSoft(primaryColor: string): string {
+  return mixColors(primaryColor, LIGHT_FOREGROUND, 0.9)
+}
+
+export interface ContrastCheck {
+  label: string
+  ratio: number
+  /** WCAG 2.2 AA minimum for this use. */
+  required: number
+  pass: boolean
+  note?: string
+}
+
+/** WCAG AA checks for every way the brand color is used in the app. */
+export function brandContrastChecks(primaryColor: string): ContrastCheck[] {
+  const check = (label: string, ratio: number, required: number, note?: string) => ({
+    label,
+    ratio,
+    required,
+    pass: ratio >= required,
+    note,
+  })
+  const ink = brandInk(primaryColor)
+  return [
+    check(
+      'Teks di tombol & header',
+      contrastRatio(primaryColor, readableForeground(primaryColor)),
+      4.5,
+    ),
+    check('Garis, ikon & grafik di latar putih', contrastRatio(primaryColor, LIGHT_FOREGROUND), 3),
+    check(
+      'Teks berwarna brand di latar putih',
+      contrastRatio(ink, LIGHT_FOREGROUND),
+      4.5,
+      ink === primaryColor.toLowerCase() ? undefined : `Otomatis digelapkan ke ${ink}`,
+    ),
+  ]
 }

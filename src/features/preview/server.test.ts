@@ -189,6 +189,15 @@ describe('expenses', () => {
     expect(rpcCreateExpense(expense({ categoryId: foreign.id }), 'cashier').ok).toBe(false)
   })
 
+  it('lets cashiers use only the categories the owner allows for the drawer', () => {
+    const ownerOnly = getPreviewState().expenseCategories.find(
+      (c) => c.businessId === BIZ && !c.allowDrawer,
+    )!
+    expect(rpcCreateExpense(expense({ categoryId: ownerOnly.id }), 'cashier').ok).toBe(false)
+    const asOwner = expense({ categoryId: ownerOnly.id, source: 'owner' })
+    expect(rpcCreateExpense(asOwner, 'owner').ok).toBe(true)
+  })
+
   it('keeps cashiers away from owner expenses', () => {
     const owner = expense({ source: 'owner' })
     rpcCreateExpense(owner, 'owner')

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  brandContrastChecks,
   brandCssVariables,
+  brandInk,
+  brandSoft,
   contrastRatio,
   DARK_FOREGROUND,
   isHexColor,
@@ -33,5 +36,28 @@ describe('brand colors', () => {
 
   it('rejects invalid colors', () => {
     expect(() => readableForeground('teal')).toThrow(RangeError)
+  })
+})
+
+describe('derived brand tokens', () => {
+  it('keeps a dark brand color as its own text color', () => {
+    expect(brandInk('#0e7490')).toBe('#0e7490')
+  })
+
+  it('darkens a light brand color until text reaches WCAG AA', () => {
+    const ink = brandInk('#facc15')
+    expect(ink).not.toBe('#facc15')
+    expect(contrastRatio(ink, LIGHT_FOREGROUND)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('reports every use of the color against its WCAG minimum', () => {
+    const checks = brandContrastChecks('#facc15')
+    expect(checks.map((c) => c.required)).toEqual([4.5, 3, 4.5])
+    expect(checks[1]?.pass).toBe(false) // yellow lines on white are too faint
+    expect(checks[2]?.pass).toBe(true) // text falls back to the darkened ink
+  })
+
+  it('tints the soft surface toward white', () => {
+    expect(contrastRatio(brandSoft('#0e7490'), LIGHT_FOREGROUND)).toBeLessThan(1.3)
   })
 })

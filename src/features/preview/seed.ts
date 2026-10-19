@@ -6,15 +6,21 @@ import type {
   CatalogItem,
   Expense,
   ExpenseCategory,
+  HistoricalDay,
   PaymentMethod,
   ReserveMovement,
   Transaction,
 } from '@/lib/types'
+import { templateRows } from '@/features/business/apply-template'
+import { normalizeLayout, type BusinessConfig } from '@/features/business/config'
+import { findTemplate, type BusinessTemplate } from '@/features/business/templates'
 import { quickCashOptions } from '@/features/pos/payment'
 import { formatReceiptNo } from '@/features/receipt/receipt-number'
 
-// Sample data for the preview. Prices are placeholders until the owner provides the
-// real Saimara price list (open question #5).
+// Sample data for the preview. Each business is built from a template (decision #25);
+// volumes follow the Saimara cash-flow audit (≈ Rp 1,9 jt/day, daily commission ≈ 35%),
+// prices stay placeholders until the owner provides the real price list (open question #5).
+// No row from the owner's spreadsheet is ever embedded here — it is imported at runtime.
 
 /** The device that produced the sample history; real devices register after it. */
 export const SEED_DEVICE = { id: 'seed-device', code: 'A' } as const
@@ -34,67 +40,35 @@ export interface RegisteredDevice {
 }
 
 export interface PreviewState {
-  version: 2
+  version: 3
   seededAt: string
   businesses: Business[]
+  businessConfigs: BusinessConfig[]
   catalogCategories: CatalogCategory[]
   catalogItems: CatalogItem[]
   expenseCategories: ExpenseCategory[]
   transactions: Transaction[]
   expenses: Expense[]
   reserveMovements: ReserveMovement[]
+  historicalDays: HistoricalDay[]
   cashierAccounts: CashierAccount[]
   devices: RegisteredDevice[]
 }
 
-interface CatalogSeed {
-  category: string
-  items: [name: string, price: number, weight: number][]
+/** Relative popularity per item name; 0 = add-on (sold alongside a main service). */
+const ITEM_WEIGHTS: Record<string, number> = {
+  'Cuci Mobil Kecil': 30,
+  'Cuci Mobil Sedang': 25,
+  'Cuci Mobil Besar / SUV': 18,
+  'Cuci Pick-up': 6,
+  'Cuci Motor': 14,
+  'Salon Interior': 2,
+  'Poles Body': 2,
+  'Cuci Mesin': 4,
+  'Cuci Kolong': 4,
+  'Layanan Reguler': 10,
+  'Layanan Premium': 4,
 }
-
-const SAIMARA_CATALOG: CatalogSeed[] = [
-  {
-    category: 'Cuci',
-    items: [
-      ['Cuci Mobil Kecil', 35_000, 30],
-      ['Cuci Mobil Sedang', 45_000, 25],
-      ['Cuci Mobil Besar / SUV', 55_000, 18],
-      ['Cuci Pick-up', 50_000, 6],
-      ['Cuci Motor', 15_000, 14],
-    ],
-  },
-  {
-    category: 'Salon & Detailing',
-    items: [
-      ['Salon Interior', 300_000, 2],
-      ['Poles Body', 350_000, 2],
-      ['Cuci Mesin', 75_000, 4],
-      ['Cuci Kolong', 40_000, 4],
-    ],
-  },
-  {
-    category: 'Tambahan',
-    items: [
-      ['Semir Ban', 10_000, 0],
-      ['Pewangi', 10_000, 0],
-      ['Vakum Interior', 15_000, 0],
-      ['Fogging AC', 50_000, 0],
-    ],
-  },
-]
-
-const DEMO_CATALOG: CatalogSeed[] = [
-  {
-    category: 'Layanan',
-    items: [
-      ['Layanan Reguler', 25_000, 10],
-      ['Layanan Premium', 60_000, 4],
-    ],
-  },
-]
-
-const EXPENSE_CATEGORY_NAMES = ['Bahan', 'Operasional', 'Gaji', 'Sewa', 'Lain-lain'] as const
-type ExpenseCategoryName = (typeof EXPENSE_CATEGORY_NAMES)[number]
 
 const HISTORY_DAYS = 45
 
@@ -151,61 +125,109 @@ function randomPlate(random: Random): string {
 
 interface BusinessSeed {
   business: Business
-  catalog: CatalogSeed[]
+  template: BusinessTemplate
   dailyBase: number
   seed: number
+  expensePlan: ExpensePlan
 }
 
-function buildBusiness(
-  input: BusinessSeed,
-  now: Date,
-  state: Omit<PreviewState, 'version' | 'seededAt' | 'businesses' | 'cashierAccounts' | 'devices'>,
-) {
-  const { business, catalog, dailyBase } = input
+type SeedState = Omit<
+  PreviewState,
+  'version' | 'seededAt' | 'businesses' | 'businessConfigs' | 'cashierAccounts' | 'devices'
+>
+
+interface DayContext {
+  dayOfMonth: number
+  /** Paid revenue of the day — the daily commission is a share of it. */
+  revenue: number
+  random: Random
+  /** Adds an expense unless its time is still in the future. */
+  add: (
+    category: string,
+    amount: number,
+    note: string,
+    source: Expense['source'],
+    hour: number,
+  ) => void
+}
+
+type ExpensePlan = (day: DayContext) => void
+
+const roundTo = (value: number, step: number) => Math.round(value / step) * step
+const between = (random: Random, min: number, max: number, step: number) =>
+  min + Math.floor(random() * ((max - min) / step + 1)) * step
+
+const carWashPlan: ExpensePlan = ({ dayOfMonth, revenue, random, add }) => {
+  // Daily, paid from the drawer at closing.
+  const commission = roundTo(revenue * (0.34 + random() * 0.04), 500)
+  add('Gaji Harian (Komisi)', commission, 'Komisi pencuci', 'drawer', 17.5)
+  add('Upah Kasir', 50_000, 'Upah kasir harian', 'drawer', 17.75)
+  add('Makan & Konsumsi', between(random, 90_000, 150_000, 15_000), 'Makan anggota', 'drawer', 12)
+  if (random() < 0.8) {
+    add(
+      'Upah Driver & Antar-Jemput',
+      between(random, 60_000, 86_000, 2_000),
+      'Antar-jemput',
+      'drawer',
+      16,
+    )
+  }
+  if (random() < 0.55) {
+    add(
+      'Komisi Cuci Gratis/Promo',
+      17_500 * (1 + Math.floor(random() * 3)),
+      'Cuci gratis',
+      'drawer',
+      15,
+    )
+  }
+  if (random() < 0.3) {
+    add('Alat & Bahan Cuci', between(random, 30_000, 210_000, 10_000), 'Sabun & lap', 'drawer', 10)
+  }
+  if (random() < 0.33) add('Listrik, Air & Internet', 200_000, 'Token listrik', 'drawer', 9)
+  if (random() < 0.12) add('Prive Owner', 20_000, 'Diambil owner', 'drawer', 14)
+  // Monthly, paid by the owner (never touches the drawer).
+  if (dayOfMonth === 1) add('Gaji Bulanan Staf', 3_800_000, 'Gaji QC & finance', 'owner', 9)
+  if (dayOfMonth === 5) add('Listrik, Air & Internet', 450_000, 'Wifi bulanan', 'owner', 9)
+  if (dayOfMonth === 10) add('Cicilan & Utang', 4_800_000, 'Cicilan bank', 'owner', 9)
+  if (dayOfMonth === 15) add('Prive Keluarga', 1_000_000, 'Kebutuhan rumah', 'owner', 19)
+  if (dayOfMonth === 20) add('Kebersihan & Sampah', 75_000, 'Sampah bulanan', 'owner', 9)
+}
+
+const generalPlan: ExpensePlan = ({ dayOfMonth, random, add }) => {
+  if (random() < 0.7) {
+    add('Bahan', between(random, 25_000, 75_000, 10_000), 'Bahan habis pakai', 'drawer', 10)
+  }
+  if (random() < 0.7) {
+    add('Operasional', between(random, 10_000, 20_000, 5_000), 'Air minum', 'drawer', 14)
+  }
+  if (dayOfMonth === 1) {
+    add('Gaji', 1_500_000, 'Gaji karyawan', 'owner', 9)
+    add('Sewa', 900_000, 'Sewa tempat', 'owner', 9)
+  }
+}
+
+function buildBusiness(input: BusinessSeed, now: Date, state: SeedState) {
+  const { business, template, dailyBase } = input
   const random = mulberry32(input.seed)
   const tz = business.timezone
 
-  const items: CatalogItem[] = []
+  const rows = templateRows(template, business.id, state)
+  state.catalogCategories.push(...rows.catalogCategories)
+  state.catalogItems.push(...rows.catalogItems)
+  state.expenseCategories.push(...rows.expenseCategories)
   const weighted: [CatalogItem, number][] = []
   const addons: CatalogItem[] = []
-  catalog.forEach((group, categoryIndex) => {
-    const category: CatalogCategory = {
-      id: newId(),
-      businessId: business.id,
-      name: group.category,
-      sortOrder: categoryIndex,
-      isActive: true,
-    }
-    state.catalogCategories.push(category)
-    group.items.forEach(([name, price, weight], itemIndex) => {
-      const item: CatalogItem = {
-        id: newId(),
-        businessId: business.id,
-        categoryId: category.id,
-        name,
-        price,
-        sortOrder: itemIndex,
-        isActive: true,
-      }
-      items.push(item)
-      if (weight > 0) weighted.push([item, weight])
-      else addons.push(item)
-    })
-  })
-  state.catalogItems.push(...items)
-
-  const expenseCategory = {} as Record<ExpenseCategoryName, ExpenseCategory>
-  EXPENSE_CATEGORY_NAMES.forEach((name, index) => {
-    const category: ExpenseCategory = {
-      id: newId(),
-      businessId: business.id,
-      name,
-      sortOrder: index,
-      isActive: true,
-    }
-    expenseCategory[name] = category
-    state.expenseCategories.push(category)
-  })
+  for (const item of rows.catalogItems) {
+    const weight = ITEM_WEIGHTS[item.name] ?? 0
+    if (weight > 0) weighted.push([item, weight])
+    else addons.push(item)
+  }
+  const categoryId = (name: string) => {
+    const category = rows.expenseCategories.find((c) => c.name === name)
+    if (!category) throw new Error(`Kategori ${name} tidak ada di template ${template.id}`)
+    return category.id
+  }
 
   const todayKey = businessDayKey(now, tz)
   const firstKey = shiftDayKey(todayKey, -(HISTORY_DAYS - 1))
@@ -225,6 +247,7 @@ function buildBusiness(
       .filter((date) => !isToday || date.getTime() < now.getTime())
       .sort((a, b) => a.getTime() - b.getTime())
 
+    let revenue = 0
     stamps.forEach((occurredAt, index) => {
       const main = pickWeighted(random, weighted)
       const chosen = [main]
@@ -248,6 +271,7 @@ function buildBusiness(
       const cashReceived =
         method === 'cash' ? (cashOptions[Math.floor(random() * cashOptions.length)] ?? total) : null
       const isVoid = random() < 0.02
+      if (!isVoid) revenue += total
       state.transactions.push({
         id: newId(),
         businessId: business.id,
@@ -273,55 +297,18 @@ function buildBusiness(
       })
     })
 
-    // Small daily drawer expenses.
-    const drawerExpenses: [ExpenseCategoryName, string, number][] = [
-      ['Bahan', 'Sabun & shampo mobil', 25_000 + Math.floor(random() * 6) * 10_000],
-      ['Operasional', 'Air minum & kebersihan', 10_000 + Math.floor(random() * 3) * 5_000],
-    ]
-    drawerExpenses.forEach(([category, note, amount], index) => {
-      const occurredAt = at(dayKey, 10 + index * 4, 15)
-      if (isToday && occurredAt.getTime() >= now.getTime()) return
-      if (random() < 0.3) return
-      state.expenses.push(
-        expense(business.id, expenseCategory[category].id, amount, note, 'drawer', occurredAt),
-      )
+    input.expensePlan({
+      dayOfMonth: Number(dayKey.slice(8, 10)),
+      revenue,
+      random,
+      add: (category, amount, note, source, hour) => {
+        const occurredAt = at(dayKey, Math.floor(hour), Math.round((hour % 1) * 60))
+        if (amount <= 0 || (isToday && occurredAt.getTime() >= now.getTime())) return
+        state.expenses.push(
+          expense(business.id, categoryId(category), amount, note, source, occurredAt),
+        )
+      },
     })
-
-    // Monthly owner expenses.
-    const dayOfMonth = Number(dayKey.slice(8, 10))
-    if (dayOfMonth === 1) {
-      const occurredAt = at(dayKey, 9, 0)
-      state.expenses.push(
-        expense(
-          business.id,
-          expenseCategory.Gaji.id,
-          dailyBase * 250_000,
-          'Gaji karyawan',
-          'owner',
-          occurredAt,
-        ),
-        expense(
-          business.id,
-          expenseCategory.Sewa.id,
-          dailyBase * 150_000,
-          'Sewa tempat',
-          'owner',
-          occurredAt,
-        ),
-      )
-    }
-    if (dayOfMonth === 5) {
-      state.expenses.push(
-        expense(
-          business.id,
-          expenseCategory.Operasional.id,
-          dailyBase * 40_000,
-          'Listrik & air',
-          'owner',
-          at(dayKey, 9, 30),
-        ),
-      )
-    }
   }
 
   const reserve = (
@@ -367,6 +354,15 @@ function expense(
   }
 }
 
+export function configFromTemplate(businessId: string, template: BusinessTemplate): BusinessConfig {
+  return {
+    businessId,
+    templateId: template.id,
+    dashboard: normalizeLayout(template.dashboard),
+    importMapping: {},
+  }
+}
+
 export function createSeedState(now: Date): PreviewState {
   const saimara: Business = {
     id: 'saimara',
@@ -394,17 +390,24 @@ export function createSeedState(now: Date): PreviewState {
     openingCash: 500_000,
     isActive: true,
   }
+  const carWash = findTemplate('cuci-mobil')
+  const general = findTemplate('umum')
 
   const state: PreviewState = {
-    version: 2,
+    version: 3,
     seededAt: now.toISOString(),
     businesses: [saimara, demo],
+    businessConfigs: [
+      configFromTemplate(saimara.id, carWash),
+      configFromTemplate(demo.id, general),
+    ],
     catalogCategories: [],
     catalogItems: [],
     expenseCategories: [],
     transactions: [],
     expenses: [],
     reserveMovements: [],
+    historicalDays: [],
     cashierAccounts: [
       { businessId: saimara.id, username: 'kasir.saimara', isActive: true },
       { businessId: demo.id, username: 'kasir.contoh', isActive: true },
@@ -416,7 +419,15 @@ export function createSeedState(now: Date): PreviewState {
       registeredAt: now.toISOString(),
     })),
   }
-  buildBusiness({ business: saimara, catalog: SAIMARA_CATALOG, dailyBase: 18, seed: 7 }, now, state)
-  buildBusiness({ business: demo, catalog: DEMO_CATALOG, dailyBase: 6, seed: 11 }, now, state)
+  buildBusiness(
+    { business: saimara, template: carWash, dailyBase: 28, seed: 7, expensePlan: carWashPlan },
+    now,
+    state,
+  )
+  buildBusiness(
+    { business: demo, template: general, dailyBase: 6, seed: 11, expensePlan: generalPlan },
+    now,
+    state,
+  )
   return state
 }

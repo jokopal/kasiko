@@ -65,6 +65,10 @@ export async function recordSale(input: SaleInput, now = new Date()): Promise<Re
   return ok(record)
 }
 
+/** Categories the cashier may pay from the drawer: active and allowed by the owner. */
+export const isDrawerCategory = (category: ExpenseCategory) =>
+  category.isActive && category.allowDrawer
+
 export interface DrawerExpenseInput {
   businessId: string
   categories: readonly ExpenseCategory[]
@@ -80,7 +84,7 @@ export async function recordDrawerExpense(
   if (!Number.isSafeInteger(input.amount) || input.amount <= 0) {
     return fail('Nominal harus lebih dari 0')
   }
-  if (!input.categories.some((c) => c.id === input.categoryId && c.isActive)) {
+  if (!input.categories.some((c) => c.id === input.categoryId && isDrawerCategory(c))) {
     return fail('Pilih kategori pengeluaran')
   }
   const record: Expense = {
