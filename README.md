@@ -79,9 +79,28 @@ pernah dihapus (hanya dibatalkan dengan alasan). Logika ini berupa fungsi murni 
 
 ## Supabase lokal (milestone 1)
 
+Butuh Docker Desktop yang sedang berjalan. Supabase CLI sudah jadi devDependency (versi dipin).
+
 ```bash
-npx supabase start   # butuh Docker
-npx supabase stop
+npm run db:start   # nyalakan Postgres + Auth + API lokal (tanpa Studio dkk.)
+npm run db:reset   # terapkan ulang semua migrasi + seed.sql
+npm run db:test    # tes pgTAP: RLS dua peran, RPC, rumus keuangan
+npm run db:types   # perbarui src/lib/database.types.ts dari skema
+npm run db:stop
 ```
+
+Akun lokal dari `seed.sql` (hanya untuk pengembangan): owner `owner@saimara.test`, kasir
+`kasir@saimara.test`, kata sandi keduanya `saimara123`.
+
+| Migrasi               | Isi                                                                                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `…0100_core_schema`   | Tabel, constraint, FK komposit antar-usaha, perangkat, data historis, audit                                                                 |
+| `…0200_access`        | Helper `is_owner`/`is_cashier`/`is_member`, RLS semua tabel, grant per kolom, view `business_branding`                                      |
+| `…0300_rpc`           | `register_device`, `create_transaction`, `create_expense`, `void_*`, `create_business`, `apply_template`, `import_history`, `clear_history` |
+| `…0400_finance_audit` | `period_totals`, `reserve_balance`, `free_cash`, `drawer_expected`, trigger audit                                                           |
+
+`supabase/seed.sql` **dihasilkan** dari template di `src/features/business/templates.ts`
+(`seed-sql.test.ts`); jangan diedit manual — jalankan
+`npx vitest run src/features/business/seed-sql.test.ts -u` setelah template berubah.
 
 Proyek Supabase remote belum dibuat/ditautkan — lihat Pertanyaan Terbuka #8 di `AGENTS.md`.

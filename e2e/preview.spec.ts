@@ -262,7 +262,7 @@ test('owner imports a cash-flow workbook and sees it in the monthly recap', asyn
   })
   await expect(page.getByText('2. Periksa isi file')).toBeVisible()
   // An unknown label is not imported until the owner picks a category for it.
-  await expect(page.getByText('Belum dikenali')).toBeVisible()
+  await expect(page.getByText('Belum dikenali', { exact: true })).toBeVisible()
   await expect(page.getByText('Rp 15.000 tidak diimpor')).toBeVisible()
   await snap(page, 'owner-import')
   await page.getByRole('button', { name: /^Impor 2 hari/ }).click()

@@ -67,6 +67,15 @@ Rumus inti: **Profit = Pemasukan − Pengeluaran** (transaksi/pengeluaran yang d
 | 27 | Data historis (impor Excel) | Tabel `historical_days` (per hari: pendapatan + pengeluaran per kategori) dari impor spreadsheet format arus kas bulanan. **Hanya untuk analisis** (dashboard, tren, rekap): tidak memengaruhi kas bebas, uang laci, atau daftar transaksi. Hari yang sudah punya data kasir dilewati; impor ulang mengganti hari yang sama. File Excel owner **tidak pernah di-commit** (`*.xlsx` di `.gitignore`) dan tidak ada angkanya di kode/seed. |
 | 28 | Rekap bulanan & ekspor | Rekap bulanan berbentuk tabel tanggal × kategori seperti Excel owner; ekspor Excel memakai format yang sama (satu sheet per bulan) sehingga bisa diimpor balik. |
 
+### Keputusan tambahan — 2026-10-20
+
+| # | Topik | Keputusan |
+|---|-------|-----------|
+| 29 | Label impor tak jelas | Label Excel yang tidak jelas ("haga", "Oktober", "Finance", "Kasir titip", dan label tak dikenal lain) **tidak dipetakan dan tidak diimpor** (pilihan "Tidak diimpor", jumlahnya tetap ditampilkan). Jika nanti perlu, owner menambah kategorinya sendiri di Admin → Kategori Pengeluaran (sakelar "Tampil di kasir" → muncul di kasir) lalu memilihnya saat impor. Template tidak punya kategori cadangan. |
+| 30 | Upah harian | Upah kasir & driver harian **diambil dari uang laci** (`allow_drawer = true`). |
+| 31 | Katalog Saimara | Tidak memakai data Olsera; katalog & harga **dibangun owner dari awal** di Admin → Katalog. Harga di template hanya contoh. |
+| 32 | Database (milestone 1) | Skema di `supabase/migrations` (4 file) dengan dua peran lewat `business_members` (`owner` / `cashier`, satu akun satu peran, satu kasir per usaha, `is_active` mencabut akses seketika). Ambang waktu perangkat (keputusan #17/#18): **> 5 menit di depan** atau **> 72 jam terlambat** → `needs_review`; pembatalan kasir di luar ambang ditolak. Retry pembatalan hanya idempoten bila membawa waktu perangkat yang sama. Data historis disimpan ternormalisasi (`historical_days` + `historical_expenses` dengan FK kategori). `seed.sql` hanya untuk lokal dan dihasilkan dari template. |
+
 ---
 
 ## 3. Stack Teknis
@@ -160,9 +169,21 @@ expenses
 business_configs                                       -- keputusan #25, hanya owner
   business_id pk, template_id, dashboard jsonb, import_mapping jsonb
 
+devices                                                -- keputusan #16
+  id, business_id, device_code (1–2 huruf, unik per usaha, tak pernah dipakai ulang),
+  registered_by, registered_at
+
 historical_days                                        -- keputusan #27, hanya owner
-  business_id, day_key date, income bigint (>= 0),
-  expenses jsonb [{category_id, amount}], imported_at, pk(business_id, day_key)
+  business_id, day_key date, income bigint (>= 0), imported_at, imported_by,
+  pk(business_id, day_key)
+historical_expenses
+  business_id, day_key, category_id (FK komposit), amount bigint (> 0)
+
+audit_log                                              -- keputusan #21, hanya owner baca
+  business_id, actor_id, action, entity, entity_id, old_data, new_data, created_at
+
+-- transactions & expenses juga punya received_at (server) dan needs_review (generated);
+-- transaction_items punya position (urutan di nota). Lihat supabase/migrations.
 
 reserve_movements
   id, business_id, type ('deposit' | 'withdraw'), amount bigint (> 0),
@@ -282,6 +303,7 @@ Kerjakan berurutan; tiap milestone diakhiri tes hijau dan demo singkat ke user.
 0. **Fondasi:** scaffold Vite + TS + Tailwind + Router + ESLint/Prettier + Vitest; Supabase CLI lokal; `.env.example`; README cara menjalankan.
    *Status 2026-10-12: selesai + pratinjau UI kasir & owner (data contoh), logika murni teruji, E2E 3 perangkat. Milestone 1 (database) ditunda atas permintaan owner.*
 1. **Database:** migrasi semua tabel, constraint, helper RLS, policy, RPC void, `seed.sql` (Saimara + katalog contoh). Tes pgTAP untuk RLS (kasir tidak bisa baca usaha lain, tidak bisa lihat rekap, tidak bisa void hari kemarin).
+   *Status 2026-10-20: selesai di Supabase **lokal** (keputusan #32): 4 migrasi, RLS di semua tabel, RPC tulis + rumus keuangan, audit, seed dari template, 90 tes pgTAP hijau, `supabase db lint` bersih, tipe di `src/lib/database.types.ts`. Belum ada proyek remote (Pertanyaan #8). Edge Function `manage-cashier` & skrip bootstrap owner menyusul di milestone 2–3.*
 2. **Auth & peran:** login, redirect per peran, guard rute, pemilih usaha owner, tema warna per usaha.
 3. **Master data owner:** pengaturan usaha/brand + upload logo, katalog, kategori pengeluaran, Edge Function akun kasir.
 4. **Kasir online:** katalog, keranjang, pembayaran, kembalian, simpan, riwayat & ringkasan hari ini, pengeluaran laci, pembatalan.
@@ -321,9 +343,9 @@ Kerjakan berurutan; tiap milestone diakhiri tes hijau dan demo singkat ke user.
 12. **Modal awal laci & tutup kasir** — rumus "uang laci seharusnya" belum memasukkan uang kembalian awal; belum ada hitung fisik laci/setoran laci ke owner, sehingga selisih uang tidak terdeteksi. Perlu fitur ini?
 13. **Diskon / harga khusus** — keputusan #2 menetapkan harga tetap. Apakah memang tidak pernah ada potongan?
 14. **Lingkungan produksi** — staging terpisah, backup (paket Supabase), SMTP untuk reset password owner, pemantauan error (mis. Sentry).
-15. **Label Excel yang belum jelas** (impor Saimara): "haga" (Rp 14,9 jt, 89 catatan — kasbon/gaji staf?), "Oktober" (Rp 200 rb ×13), "Finance" (gaji staf atau cicilan leasing?), "Kasir titip". Owner memilih kategorinya saat impor; pilihan diingat.
-16. **Upah kasir & driver harian** — diambil dari uang laci? (template mengasumsikan ya: `allow_drawer = true`).
-17. **Olsera** — masih dipakai? Ekspor penjualannya bisa memberi daftar layanan & harga (Pertanyaan #5).
+15. ~~**Label Excel yang belum jelas**~~ — dijawab 2026-10-20: tidak diimpor sampai owner membuat kategorinya (keputusan #29).
+16. ~~**Upah kasir & driver harian**~~ — dijawab 2026-10-20: dari uang laci (keputusan #30).
+17. ~~**Olsera**~~ — dijawab 2026-10-20: tidak dipakai, katalog dibangun dari awal (keputusan #31).
 
 ## 13. Ditunda (bukan cakupan sekarang)
 
