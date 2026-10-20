@@ -5,7 +5,9 @@
 //   node --env-file=.env.bootstrap scripts/bootstrap-owner.ts \
 //     --email owner@saimara.id --business Saimara --prefix SMR --template cuci-mobil
 //
-// .env.bootstrap (git-ignored): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OWNER_PASSWORD
+// .env.bootstrap (git-ignored): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OWNER_PASSWORD.
+// The key is the project's secret API key (`sb_secret_…`): that is what the Edge runtime
+// holds as SUPABASE_SERVICE_ROLE_KEY on projects with the new API keys.
 import { parseArgs } from 'node:util'
 import { normalizeLayout } from '../src/features/business/config.ts'
 import { findTemplate } from '../src/features/business/templates.ts'

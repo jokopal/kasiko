@@ -124,7 +124,7 @@ npx supabase db push --db-url "postgresql://postgres.<ref>:<password>@aws-0-<reg
 ```bash
 npx supabase login                       # akun pemilik proyek
 npx supabase functions deploy --project-ref <ref> --use-api
-# owner pertama (secrets di .env.bootstrap, ter-ignore):
+# owner pertama (secrets di .env.bootstrap, ter-ignore; kunci = secret key sb_secret_…):
 node --env-file=.env.bootstrap scripts/bootstrap-owner.ts \
   --email owner@contoh.id --business Saimara --prefix SMR --template cuci-mobil
 ```
