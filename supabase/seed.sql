@@ -14,12 +14,12 @@ insert into auth.users (
   (
     '00000000-0000-0000-0000-000000000000', '5a1a0000-0000-4000-8000-000000000001', 'authenticated', 'authenticated',
     'owner@saimara.test', extensions.crypt('saimara123', extensions.gen_salt('bf')),
-    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''
+    now(), '{"provider":"email","providers":["email"],"kasiko_role":"owner"}'::jsonb, '{}', now(), now(), '', '', '', ''
   ),
   (
     '00000000-0000-0000-0000-000000000000', '5a1a0000-0000-4000-8000-000000000002', 'authenticated', 'authenticated',
     'kasir@saimara.test', extensions.crypt('saimara123', extensions.gen_salt('bf')),
-    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''
+    now(), '{"provider":"email","providers":["email"],"kasiko_role":"cashier"}'::jsonb, '{}', now(), now(), '', '', '', ''
   );
 
 insert into auth.identities (

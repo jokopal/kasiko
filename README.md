@@ -103,4 +103,28 @@ Akun lokal dari `seed.sql` (hanya untuk pengembangan): owner `owner@saimara.test
 (`seed-sql.test.ts`); jangan diedit manual — jalankan
 `npx vitest run src/features/business/seed-sql.test.ts -u` setelah template berubah.
 
-Proyek Supabase remote belum dibuat/ditautkan — lihat Pertanyaan Terbuka #8 di `AGENTS.md`.
+### Proyek Supabase (remote)
+
+Kredensial ada di file lokal yang di-ignore — **jangan pernah di-commit**. Host `db.<ref>` hanya
+IPv6, jadi migrasi memakai session pooler IPv4:
+
+```bash
+npx supabase db push --db-url "postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres"
+```
+
+`seed.sql` **tidak** dikirim ke proyek (berisi akun uji).
+
+### Edge Functions
+
+| Fungsi            | Dipanggil oleh      | Untuk                                               |
+| ----------------- | ------------------- | --------------------------------------------------- |
+| `manage-cashier`  | owner (JWT)         | buat / reset kata sandi / aktif-nonaktif akun kasir |
+| `bootstrap-owner` | admin (service key) | buat akun owner + usaha pertama dari template       |
+
+```bash
+npx supabase login                       # akun pemilik proyek
+npx supabase functions deploy --project-ref <ref> --use-api
+# owner pertama (secrets di .env.bootstrap, ter-ignore):
+node --env-file=.env.bootstrap scripts/bootstrap-owner.ts \
+  --email owner@contoh.id --business Saimara --prefix SMR --template cuci-mobil
+```

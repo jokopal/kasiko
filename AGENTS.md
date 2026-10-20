@@ -75,6 +75,7 @@ Rumus inti: **Profit = Pemasukan − Pengeluaran** (transaksi/pengeluaran yang d
 | 30 | Upah harian | Upah kasir & driver harian **diambil dari uang laci** (`allow_drawer = true`). |
 | 31 | Katalog Saimara | Tidak memakai data Olsera; katalog & harga **dibangun owner dari awal** di Admin → Katalog. Harga di template hanya contoh. |
 | 32 | Database (milestone 1) | Skema di `supabase/migrations` (4 file) dengan dua peran lewat `business_members` (`owner` / `cashier`, satu akun satu peran, satu kasir per usaha, `is_active` mencabut akses seketika). Ambang waktu perangkat (keputusan #17/#18): **> 5 menit di depan** atau **> 72 jam terlambat** → `needs_review`; pembatalan kasir di luar ambang ditolak. Retry pembatalan hanya idempoten bila membawa waktu perangkat yang sama. Data historis disimpan ternormalisasi (`historical_days` + `historical_expenses` dengan FK kategori). `seed.sql` hanya untuk lokal dan dihasilkan dari template. |
+| 33 | Proyek & Edge Function | Owner memakai **proyek Supabase yang sudah ada** (tanpa Docker lokal); kredensial hanya di file lokal yang di-ignore, tidak pernah di repo. Migrasi diterapkan dengan `supabase db push --db-url` lewat session pooler IPv4. Transaksi & pengeluaran tetap lewat **RPC** (langsung ke database, bisa offline — keputusan #14). **Edge Function hanya untuk operasi ber-hak service role:** `manage-cashier` (owner membuat/reset/nonaktifkan akun kasir; username → email `@kasir.kasiko.invalid`) dan `bootstrap-owner` (membuat akun owner + usaha pertama; hanya dengan service key). Akun owner ditandai `app_metadata.kasiko_role = 'owner'`; `create_business` menolak akun lain, sehingga pendaftaran liar tidak bisa membuat usaha walau sign-up terbuka. |
 
 ---
 
@@ -303,7 +304,7 @@ Kerjakan berurutan; tiap milestone diakhiri tes hijau dan demo singkat ke user.
 0. **Fondasi:** scaffold Vite + TS + Tailwind + Router + ESLint/Prettier + Vitest; Supabase CLI lokal; `.env.example`; README cara menjalankan.
    *Status 2026-10-12: selesai + pratinjau UI kasir & owner (data contoh), logika murni teruji, E2E 3 perangkat. Milestone 1 (database) ditunda atas permintaan owner.*
 1. **Database:** migrasi semua tabel, constraint, helper RLS, policy, RPC void, `seed.sql` (Saimara + katalog contoh). Tes pgTAP untuk RLS (kasir tidak bisa baca usaha lain, tidak bisa lihat rekap, tidak bisa void hari kemarin).
-   *Status 2026-10-20: selesai di Supabase **lokal** (keputusan #32): 4 migrasi, RLS di semua tabel, RPC tulis + rumus keuangan, audit, seed dari template, 90 tes pgTAP hijau, `supabase db lint` bersih, tipe di `src/lib/database.types.ts`. Belum ada proyek remote (Pertanyaan #8). Edge Function `manage-cashier` & skrip bootstrap owner menyusul di milestone 2–3.*
+   *Status 2026-10-20: 5 migrasi **diterapkan ke proyek Supabase owner** (keputusan #32–#33); 95 tes pgTAP hijau langsung di database proyek (dalam transaksi yang di-rollback, tanpa sisa data). Edge Function `manage-cashier` & `bootstrap-owner` + `scripts/bootstrap-owner.ts` sudah ditulis dan dites; **deploy menunggu login CLI dengan akun pemilik proyek**. Sign-up publik di proyek masih menyala — harus dimatikan di dashboard (Authentication → Sign In / Providers).*
 2. **Auth & peran:** login, redirect per peran, guard rute, pemilih usaha owner, tema warna per usaha.
 3. **Master data owner:** pengaturan usaha/brand + upload logo, katalog, kategori pengeluaran, Edge Function akun kasir.
 4. **Kasir online:** katalog, keranjang, pembayaran, kembalian, simpan, riwayat & ringkasan hari ini, pengeluaran laci, pembatalan.
@@ -336,7 +337,7 @@ Kerjakan berurutan; tiap milestone diakhiri tes hijau dan demo singkat ke user.
 5. **Daftar layanan & harga Saimara** untuk `seed.sql`.
 6. **Logo & warna** Saimara.
 7. **Zona waktu** lokasi Saimara (WIB / WITA / WIT) — menentukan batas "hari ini".
-8. **Proyek Supabase**: sudah punya atau buat baru? (Jangan buat sendiri tanpa izin.)
+8. ~~**Proyek Supabase**~~ — dijawab 2026-10-20: sudah ada, dipakai langsung (keputusan #33).
 9. **Konfirmasi rumus kas bebas** & konsep saldo awal kas (bagian 4).
 10. ~~**Kategori pengeluaran**~~ — dijawab 2026-10-19: diatur owner per usaha, default dari template (keputusan #24–#26).
 11. **Dana cadangan per usaha** — asumsi: terpisah per usaha (bukan gabungan).

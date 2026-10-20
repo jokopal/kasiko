@@ -1,13 +1,15 @@
 -- Write RPCs: the server re-validates everything and every call is safe to retry.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(41);
+select plan(46);
 
 -- Fixture: business A (owner + cashier, one device) and business B (one device).
 insert into auth.users (id, email) values
   ('a0000000-0000-4000-8000-00000000000a', 'owner-a@kasiko.test'),
   ('a0000000-0000-4000-8000-00000000000c', 'kasir-a@kasiko.test'),
-  ('b0000000-0000-4000-8000-00000000000a', 'owner-b@kasiko.test');
+  ('b0000000-0000-4000-8000-00000000000a', 'owner-b@kasiko.test'),
+  ('c0000000-0000-4000-8000-00000000000a', 'daftar-sendiri@kasiko.test'),
+  ('c0000000-0000-4000-8000-00000000000b', 'owner-baru@kasiko.test');
 insert into public.businesses (id, owner_id, name, receipt_prefix) values
   ('a0000000-0000-4000-8000-0000000000b0', 'a0000000-0000-4000-8000-00000000000a', 'Usaha A', 'UA'),
   ('b0000000-0000-4000-8000-0000000000b0', 'b0000000-0000-4000-8000-00000000000a', 'Usaha B', 'UB');
@@ -259,6 +261,36 @@ select results_eq(
   $$values (1, 1)$$,
   'the new business has its template rows and its owner membership'
 );
+
+-- Owner accounts (decision #22): a self-registered account cannot create a business; an
+-- account the server marked as owner (app_metadata) can.
+set local request.jwt.claims to '{"sub":"c0000000-0000-4000-8000-00000000000a","role":"authenticated","app_metadata":{"provider":"email"}}';
+select throws_ok(
+  $$select public.create_business('{"name":"Liar","receipt_prefix":"LR"}')$$,
+  '42501', 'Hanya akun owner yang bisa membuat usaha',
+  'a self-registered account cannot create a business'
+);
+set local request.jwt.claims to '{"sub":"c0000000-0000-4000-8000-00000000000b","role":"authenticated","app_metadata":{"kasiko_role":"owner"}}';
+select isnt(
+  public.create_business('{"name":"Usaha Baru","receipt_prefix":"UN"}'),
+  null, 'an account marked as owner by the server creates its first business'
+);
+reset role;
+select ok(
+  not has_function_privilege('authenticated', 'public.admin_revoke_sessions(uuid)', 'execute'),
+  'only the service role may end sessions'
+);
+select ok(
+  has_function_privilege('service_role', 'public.apply_template_rows(uuid, jsonb)', 'execute')
+    and has_function_privilege('service_role', 'public.admin_revoke_sessions(uuid)', 'execute'),
+  'Edge Functions (service role) can run internal helpers'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.apply_template_rows(uuid, jsonb)', 'execute'),
+  'users cannot add template rows to arbitrary businesses'
+);
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"a0000000-0000-4000-8000-00000000000a","role":"authenticated"}';
 
 -- Imported history (decision #27)
 select is(

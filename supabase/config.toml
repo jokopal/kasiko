@@ -413,3 +413,11 @@ enabled = true
 # formatted with uppercase keywords, indent 2, max width 180, trailing commas,
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
+
+# Owner manages the cashier account with their own JWT (decision #4).
+[functions.manage-cashier]
+verify_jwt = true
+
+# Checks the service role key itself; never called by the app (decision #22).
+[functions.bootstrap-owner]
+verify_jwt = false

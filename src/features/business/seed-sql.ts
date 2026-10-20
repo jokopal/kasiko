@@ -28,7 +28,7 @@ export function buildSeedSql(): string {
     (a) => `  (
     '00000000-0000-0000-0000-000000000000', ${literal(a.id)}, 'authenticated', 'authenticated',
     ${literal(a.email)}, extensions.crypt(${literal(a.password)}, extensions.gen_salt('bf')),
-    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''
+    now(), ${json({ provider: 'email', providers: ['email'], kasiko_role: a.role })}, '{}', now(), now(), '', '', '', ''
   )`,
   ).join(',\n')
   const identities = SEED_ACCOUNTS.map(
