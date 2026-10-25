@@ -1,6 +1,11 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: '14.18'
+  }
   public: {
     Tables: {
       audit_log: {
@@ -58,24 +63,24 @@ export type Database = {
         Row: {
           business_id: string
           created_at: string
-          dashboard: NonNullable<Json>
-          import_mapping: NonNullable<Json>
+          dashboard: Json
+          import_mapping: Json
           template_id: string
           updated_at: string
         }
         Insert: {
           business_id: string
           created_at?: string
-          dashboard?: NonNullable<Json>
-          import_mapping?: NonNullable<Json>
+          dashboard?: Json
+          import_mapping?: Json
           template_id?: string
           updated_at?: string
         }
         Update: {
           business_id?: string
           created_at?: string
-          dashboard?: NonNullable<Json>
-          import_mapping?: NonNullable<Json>
+          dashboard?: Json
+          import_mapping?: Json
           template_id?: string
           updated_at?: string
         }
@@ -337,6 +342,57 @@ export type Database = {
           },
         ]
       }
+      discounts: {
+        Row: {
+          business_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          type: Database['public']['Enums']['discount_type']
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          type: Database['public']['Enums']['discount_type']
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          type?: Database['public']['Enums']['discount_type']
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'discounts_business_id_fkey'
+            columns: ['business_id']
+            isOneToOne: false
+            referencedRelation: 'business_branding'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'discounts_business_id_fkey'
+            columns: ['business_id']
+            isOneToOne: false
+            referencedRelation: 'businesses'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       expense_categories: {
         Row: {
           allow_drawer: boolean
@@ -416,7 +472,7 @@ export type Database = {
           created_by?: string | null
           device_id?: string | null
           id?: string
-          needs_review?: never
+          needs_review?: boolean | null
           note?: string
           occurred_at: string
           received_at?: string
@@ -435,7 +491,7 @@ export type Database = {
           created_by?: string | null
           device_id?: string | null
           id?: string
-          needs_review?: never
+          needs_review?: boolean | null
           note?: string
           occurred_at?: string
           received_at?: string
@@ -558,6 +614,92 @@ export type Database = {
           },
         ]
       }
+      orders: {
+        Row: {
+          business_id: string
+          cancel_reason: string | null
+          cancelled_at: string | null
+          created_at: string
+          created_by: string | null
+          device_id: string
+          device_updated_at: string
+          id: string
+          items: Json
+          opened_at: string
+          plate_number: string | null
+          received_at: string
+          status: Database['public']['Enums']['order_status']
+          total: number
+          transaction_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          device_id: string
+          device_updated_at: string
+          id: string
+          items: Json
+          opened_at: string
+          plate_number?: string | null
+          received_at?: string
+          status?: Database['public']['Enums']['order_status']
+          total: number
+          transaction_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          device_id?: string
+          device_updated_at?: string
+          id?: string
+          items?: Json
+          opened_at?: string
+          plate_number?: string | null
+          received_at?: string
+          status?: Database['public']['Enums']['order_status']
+          total?: number
+          transaction_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'orders_business_id_device_id_fkey'
+            columns: ['business_id', 'device_id']
+            isOneToOne: false
+            referencedRelation: 'devices'
+            referencedColumns: ['business_id', 'id']
+          },
+          {
+            foreignKeyName: 'orders_business_id_fkey'
+            columns: ['business_id']
+            isOneToOne: false
+            referencedRelation: 'business_branding'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'orders_business_id_fkey'
+            columns: ['business_id']
+            isOneToOne: false
+            referencedRelation: 'businesses'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'orders_business_id_transaction_id_fkey'
+            columns: ['business_id', 'transaction_id']
+            isOneToOne: false
+            referencedRelation: 'transactions'
+            referencedColumns: ['business_id', 'id']
+          },
+        ]
+      }
       reserve_movements: {
         Row: {
           amount: number
@@ -674,14 +816,21 @@ export type Database = {
           created_at: string
           created_by: string | null
           device_id: string
+          discount_amount: number
+          discount_id: string | null
+          discount_name: string | null
+          discount_type: Database['public']['Enums']['discount_type'] | null
+          discount_value: number | null
           id: string
           needs_review: boolean | null
           occurred_at: string
+          order_id: string | null
           payment_method: Database['public']['Enums']['payment_method']
           plate_number: string | null
           receipt_no: string
           received_at: string
           status: Database['public']['Enums']['transaction_status']
+          subtotal: number
           total: number
           updated_at: string
           void_reason: string | null
@@ -695,14 +844,21 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           device_id: string
+          discount_amount?: number
+          discount_id?: string | null
+          discount_name?: string | null
+          discount_type?: Database['public']['Enums']['discount_type'] | null
+          discount_value?: number | null
           id: string
-          needs_review?: never
+          needs_review?: boolean | null
           occurred_at: string
+          order_id?: string | null
           payment_method: Database['public']['Enums']['payment_method']
           plate_number?: string | null
           receipt_no: string
           received_at?: string
           status?: Database['public']['Enums']['transaction_status']
+          subtotal: number
           total: number
           updated_at?: string
           void_reason?: string | null
@@ -716,14 +872,21 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           device_id?: string
+          discount_amount?: number
+          discount_id?: string | null
+          discount_name?: string | null
+          discount_type?: Database['public']['Enums']['discount_type'] | null
+          discount_value?: number | null
           id?: string
-          needs_review?: never
+          needs_review?: boolean | null
           occurred_at?: string
+          order_id?: string | null
           payment_method?: Database['public']['Enums']['payment_method']
           plate_number?: string | null
           receipt_no?: string
           received_at?: string
           status?: Database['public']['Enums']['transaction_status']
+          subtotal?: number
           total?: number
           updated_at?: string
           void_reason?: string | null
@@ -751,6 +914,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'businesses'
             referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'transactions_discount_fk'
+            columns: ['business_id', 'discount_id']
+            isOneToOne: false
+            referencedRelation: 'discounts'
+            referencedColumns: ['business_id', 'id']
+          },
+          {
+            foreignKeyName: 'transactions_order_fk'
+            columns: ['business_id', 'order_id']
+            isOneToOne: false
+            referencedRelation: 'orders'
+            referencedColumns: ['business_id', 'id']
           },
         ]
       }
@@ -797,22 +974,85 @@ export type Database = {
       }
     }
     Functions: {
-      apply_template: { Args: { p_business_id: string; p_template: Json }; Returns: Json }
-      apply_template_rows: { Args: { p_business_id: string; p_template: Json }; Returns: Json }
+      admin_revoke_sessions: { Args: { p_user_id: string }; Returns: number }
+      apply_template: {
+        Args: { p_business_id: string; p_template: Json }
+        Returns: Json
+      }
+      apply_template_rows: {
+        Args: { p_business_id: string; p_template: Json }
+        Returns: Json
+      }
       assert_cashier_can_void: {
-        Args: { p_business_id: string; p_occurred_at: string; p_requested_at: string }
+        Args: {
+          p_business_id: string
+          p_occurred_at: string
+          p_requested_at: string
+        }
         Returns: undefined
       }
-      assert_plausible_device_time: { Args: { p_at: string }; Returns: undefined }
-      business_day: { Args: { p_at: string; p_business_id: string }; Returns: string }
-      business_day_start: { Args: { p_at?: string; p_business_id: string }; Returns: string }
+      assert_owner: { Args: { p_business_id: string }; Returns: undefined }
+      assert_plausible_device_time: {
+        Args: { p_at: string }
+        Returns: undefined
+      }
+      business_day: {
+        Args: { p_at: string; p_business_id: string }
+        Returns: string
+      }
+      business_day_start: {
+        Args: { p_at?: string; p_business_id: string }
+        Returns: string
+      }
       business_timezone: { Args: { p_business_id: string }; Returns: string }
+      busy_hours: {
+        Args: { p_business_id: string; p_from: string; p_to: string }
+        Returns: {
+          count: number
+          hour: number
+          weekday: number
+        }[]
+      }
+      cancel_order: {
+        Args: { p_cancelled_at?: string; p_id: string; p_reason: string }
+        Returns: Json
+      }
       clear_history: { Args: { p_business_id: string }; Returns: number }
-      create_business: { Args: { p_business: Json; p_template?: Json }; Returns: string }
+      create_business: {
+        Args: { p_business: Json; p_template?: Json }
+        Returns: string
+      }
       create_expense: { Args: { p: Json }; Returns: Json }
       create_transaction: { Args: { p: Json }; Returns: Json }
+      daily_totals: {
+        Args: { p_business_id: string; p_first_day: string; p_last_day: string }
+        Returns: {
+          day_key: string
+          expense: number
+          income: number
+        }[]
+      }
+      discount_amount: {
+        Args: {
+          p_subtotal: number
+          p_type: Database['public']['Enums']['discount_type']
+          p_value: number
+        }
+        Returns: number
+      }
       drawer_expected: { Args: { p_business_id: string }; Returns: number }
-      free_cash: { Args: { p_business_id: string; p_until?: string }; Returns: number }
+      expense_by_category: {
+        Args: { p_business_id: string; p_from: string; p_to: string }
+        Returns: {
+          amount: number
+          category_id: string
+        }[]
+      }
+      first_activity_day: { Args: { p_business_id: string }; Returns: string }
+      free_cash: {
+        Args: { p_business_id: string; p_until?: string }
+        Returns: number
+      }
       import_history: {
         Args: { p_business_id: string; p_days: Json; p_mapping?: Json }
         Returns: number
@@ -820,10 +1060,35 @@ export type Database = {
       is_cashier: { Args: { p_business_id: string }; Returns: boolean }
       is_member: { Args: { p_business_id: string }; Returns: boolean }
       is_owner: { Args: { p_business_id: string }; Returns: boolean }
+      is_owner_account: { Args: never; Returns: boolean }
+      live_days: {
+        Args: { p_business_id: string; p_first_day: string; p_last_day: string }
+        Returns: string[]
+      }
+      monthly_matrix: {
+        Args: { p_business_id: string; p_month: string }
+        Returns: {
+          amount: number
+          category_id: string
+          day_key: string
+          imported: boolean
+        }[]
+      }
+      monthly_totals: {
+        Args: { p_business_id: string; p_first_month: string; p_months: number }
+        Returns: {
+          drawings: number
+          income: number
+          month_key: string
+          non_operating_expense: number
+          operating_expense: number
+        }[]
+      }
       normalize_label: { Args: { p_text: string }; Returns: string }
       period_totals: {
         Args: { p_business_id: string; p_from: string; p_to: string }
         Returns: {
+          discount_total: number
           drawer_expense: number
           drawings: number
           expense: number
@@ -860,7 +1125,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      reserve_balance: { Args: { p_business_id: string; p_until?: string }; Returns: number }
+      reserve_balance: {
+        Args: { p_business_id: string; p_until?: string }
+        Returns: number
+      }
+      save_order: { Args: { p: Json }; Returns: Json }
+      top_items: {
+        Args: {
+          p_business_id: string
+          p_from: string
+          p_limit?: number
+          p_to: string
+        }
+        Returns: {
+          name: string
+          qty: number
+          revenue: number
+        }[]
+      }
       transaction_json: { Args: { p_id: string }; Returns: Json }
       void_expense: {
         Args: { p_id: string; p_reason: string; p_voided_at?: string }
@@ -872,10 +1154,12 @@ export type Database = {
       }
     }
     Enums: {
+      discount_type: 'percent' | 'amount'
       expense_kind: 'operating' | 'non_operating' | 'drawing'
       expense_source: 'drawer' | 'owner'
       expense_status: 'active' | 'void'
       member_role: 'owner' | 'cashier'
+      order_status: 'open' | 'paid' | 'cancelled'
       payment_method: 'cash' | 'qris' | 'transfer'
       reserve_source: 'cash' | 'capital'
       reserve_type: 'deposit' | 'withdraw'
@@ -901,7 +1185,9 @@ export type Tables<
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])
     : never) = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])[TableName] extends {
       Row: infer R
@@ -924,7 +1210,9 @@ export type TablesInsert<
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
     : never) = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
       Insert: infer I
     }
@@ -946,7 +1234,9 @@ export type TablesUpdate<
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
     : never) = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
       Update: infer U
     }
@@ -968,7 +1258,9 @@ export type Enums<
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums']
     : never) = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums'][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema['Enums']
     ? DefaultSchema['Enums'][DefaultSchemaEnumNameOrOptions]
@@ -982,7 +1274,9 @@ export type CompositeTypes<
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes']
     : never) = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes'][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema['CompositeTypes']
     ? DefaultSchema['CompositeTypes'][PublicCompositeTypeNameOrOptions]
@@ -991,10 +1285,12 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      discount_type: ['percent', 'amount'],
       expense_kind: ['operating', 'non_operating', 'drawing'],
       expense_source: ['drawer', 'owner'],
       expense_status: ['active', 'void'],
       member_role: ['owner', 'cashier'],
+      order_status: ['open', 'paid', 'cancelled'],
       payment_method: ['cash', 'qris', 'transfer'],
       reserve_source: ['cash', 'capital'],
       reserve_type: ['deposit', 'withdraw'],

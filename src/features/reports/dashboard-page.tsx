@@ -339,6 +339,9 @@ function DailyTrend({
   tz: string
 }) {
   const label = (key: string) => formatShortDate(startOfBusinessDayKey(key, tz), tz)
+  if (series.every((point) => point.income === 0 && point.expense === 0)) {
+    return <p className="py-6 text-center text-sm text-muted-foreground">Belum ada data</p>
+  }
   return (
     <ChartContainer config={trendConfig} className="aspect-auto h-64 w-full md:h-72">
       <BarChart data={series} barGap={2} margin={{ left: 4, right: 4 }}>

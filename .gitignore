@@ -44,3 +44,6 @@ test-results
 
 # Supabase credentials (never commit)
 supabase se.txt
+
+# Local-only checks against production
+e2e-local
