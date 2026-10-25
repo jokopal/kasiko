@@ -77,39 +77,42 @@ Aturan inti: uang selalu **integer rupiah**, batas hari mengikuti **zona waktu u
 pernah dihapus (hanya dibatalkan dengan alasan). Logika ini berupa fungsi murni di `lib/` dan
 `features/*/` yang dites, dan akan dipakai ulang oleh RPC server.
 
-## Supabase lokal (milestone 1)
+## Database (Supabase)
 
-Butuh Docker Desktop yang sedang berjalan. Supabase CLI sudah jadi devDependency (versi dipin).
+Database berjalan di **proyek Supabase owner** — tidak perlu Docker (keputusan #33). Rahasia
+ada di `.env.bootstrap` (ter-ignore git):
 
-```bash
-npm run db:start   # nyalakan Postgres + Auth + API lokal (tanpa Studio dkk.)
-npm run db:reset   # terapkan ulang semua migrasi + seed.sql
-npm run db:test    # tes pgTAP: RLS dua peran, RPC, rumus keuangan
-npm run db:types   # perbarui src/lib/database.types.ts dari skema
-npm run db:stop
+```
+SUPABASE_URL=https://<ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<kunci service: JWT service_role atau sb_secret_…>
+SUPABASE_DB_URL=postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+OWNER_PASSWORD=<hanya saat bootstrap owner>
 ```
 
-Akun lokal dari `seed.sql` (hanya untuk pengembangan): owner `owner@saimara.test`, kasir
-`kasir@saimara.test`, kata sandi keduanya `saimara123`.
+```bash
+npm run db:test        # tes pgTAP ke database proyek, tiap file di-rollback (tanpa Docker)
+npm run db:types       # perbarui src/lib/database.types.ts (butuh `npx supabase login`)
+npm run db:test:local  # opsional: tes di Supabase lokal (butuh Docker)
+```
 
-| Migrasi               | Isi                                                                                                                                         |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `…0100_core_schema`   | Tabel, constraint, FK komposit antar-usaha, perangkat, data historis, audit                                                                 |
-| `…0200_access`        | Helper `is_owner`/`is_cashier`/`is_member`, RLS semua tabel, grant per kolom, view `business_branding`                                      |
-| `…0300_rpc`           | `register_device`, `create_transaction`, `create_expense`, `void_*`, `create_business`, `apply_template`, `import_history`, `clear_history` |
-| `…0400_finance_audit` | `period_totals`, `reserve_balance`, `free_cash`, `drawer_expected`, trigger audit                                                           |
+| Migrasi                | Isi                                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `…0100_core_schema`    | Tabel, constraint, FK komposit antar-usaha, perangkat, data historis, audit                                                                 |
+| `…0200_access`         | Helper `is_owner`/`is_cashier`/`is_member`, RLS semua tabel, grant per kolom, view `business_branding`                                      |
+| `…0300_rpc`            | `register_device`, `create_transaction`, `create_expense`, `void_*`, `create_business`, `apply_template`, `import_history`, `clear_history` |
+| `…0400_finance_audit`  | `period_totals`, `reserve_balance`, `free_cash`, `drawer_expected`, trigger audit                                                           |
+| `…0500_owner_accounts` | `is_owner_account`, `create_business` hanya untuk akun owner, `admin_revoke_sessions`                                                       |
 
-`supabase/seed.sql` **dihasilkan** dari template di `src/features/business/templates.ts`
-(`seed-sql.test.ts`); jangan diedit manual — jalankan
+`supabase/seed.sql` (akun uji, hanya untuk Supabase lokal) **dihasilkan** dari
+`src/features/business/templates.ts`; jangan diedit manual — jalankan
 `npx vitest run src/features/business/seed-sql.test.ts -u` setelah template berubah.
 
 ### Proyek Supabase (remote)
 
-Kredensial ada di file lokal yang di-ignore — **jangan pernah di-commit**. Host `db.<ref>` hanya
-IPv6, jadi migrasi memakai session pooler IPv4:
+Host `db.<ref>` hanya IPv6, jadi migrasi memakai session pooler IPv4 (`SUPABASE_DB_URL`):
 
 ```bash
-npx supabase db push --db-url "postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres"
+npx supabase db push --db-url "$SUPABASE_DB_URL"   # tanya owner dulu (aturan kerja agent)
 ```
 
 `seed.sql` **tidak** dikirim ke proyek (berisi akun uji).

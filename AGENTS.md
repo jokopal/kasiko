@@ -1,355 +1,382 @@
-# Konteks Proyek: Aplikasi Kasir & Keuangan (PWA + Supabase)
+# Kasiko — Brief Proyek
 
-> Dokumen ini adalah instruksi untuk agent yang mengeksekusi proyek ini.
-> Baca seluruhnya sebelum menulis kode. Keputusan di bagian **Keputusan Terkunci**
-> sudah disetujui owner — jangan diubah tanpa bertanya. Bagian **Pertanyaan Terbuka**
-> harus ditanyakan ke user sebelum mengerjakan fitur yang terdampak.
-
-Bahasa: diskusi dengan user dan seluruh teks UI dalam **Bahasa Indonesia**.
-Kode, nama tabel/kolom, commit message, dan komentar kode dalam **bahasa Inggris**.
-
----
-
-## 1. Ringkasan Produk
-
-Aplikasi web progresif (PWA) untuk mencatat pemasukan (kasir) dan pengeluaran usaha,
-lalu menyajikan rekap profit dan analisis untuk owner.
-
-- **Satu owner, banyak usaha.** Owner bisa punya beberapa usaha dan berpindah di antaranya.
-- **Usaha pertama: Saimara** — usaha cuci mobil. (Nama repo `kasiko`; nama usaha ditulis **Saimara**.)
-- **Dua peran:** `kasir` dan `owner`.
-- Dipakai di HP, tablet, dan laptop; bisa di-install sebagai aplikasi (PWA).
-
-Rumus inti: **Profit = Pemasukan − Pengeluaran** (transaksi/pengeluaran yang dibatalkan tidak dihitung).
+> **Versi 2 — dikomisikan ulang 2026-10-25.** Dokumen ini adalah satu-satunya brief untuk
+> agent dan pengembang. Baca seluruhnya sebelum menulis kode.
+>
+> - **Keputusan Terkunci (bagian 5)** sudah disetujui owner — jangan diubah tanpa bertanya.
+> - **Pertanyaan Terbuka (bagian 12)** wajib ditanyakan sebelum mengerjakan fitur yang terdampak.
+> - Bahasa: diskusi dengan owner & seluruh teks UI dalam **Bahasa Indonesia**; kode, nama
+>   tabel/kolom, commit message, dan komentar kode dalam **bahasa Inggris**.
 
 ---
 
-## 2. Keputusan Terkunci (disetujui owner)
+## 1. Tujuan
+
+Kasiko adalah **aplikasi pribadi milik satu owner** untuk melacak **pemasukan dan pengeluaran
+usahanya**, lalu melihat profit dan arus kas tanpa spreadsheet. Usaha pertama adalah
+**Saimara** (cuci mobil). Owner bisa menambah usaha lain kapan saja; setiap usaha terpisah
+datanya, brand-nya, dan akun kasirnya.
+
+Kasiko menggantikan cara lama owner: satu file Excel per tahun, satu sheet per bulan, satu
+angka pendapatan per hari, dan ±75 label pengeluaran yang ditulis bebas (audit 2026-10-19:
+22 bulan, 608 hari, Rp 1,16 M pendapatan). Masalah cara lama yang harus hilang:
+
+1. Pendapatan hanya total harian — tidak tahu layanan apa yang laku, metode bayar, jam ramai.
+2. Label pengeluaran berubah-ubah — bulan tidak bisa dibandingkan.
+3. "Net profit" tercampur cicilan, pembelian aset, dan uang yang diambil owner/keluarga.
+4. Tidak ada jejak siapa mencatat apa, dan tidak ada kontrol uang laci.
+
+**Bukan tujuan:** produk SaaS untuk banyak owner. Skema tidak menghalangi ke sana
+(keputusan #1), tetapi tidak ada yang dibangun untuk itu.
+
+## 2. Pengguna & peran
+
+| Peran | Siapa | Masuk dengan | Bisa |
+|-------|-------|--------------|------|
+| **Owner** | Pemilik (satu orang), semua usaha | Email + kata sandi | Semua data usahanya: rekap, analisis, pengeluaran owner, cadangan, impor, master data, akun kasir |
+| **Kasir** | **Satu akun bersama per usaha**, dipakai di perangkat kasir | Nama pengguna + kata sandi | Mencatat penjualan & pengeluaran laci, mencetak/mengirim nota, membatalkan data **hari ini**, melihat ringkasan hari ini |
+
+Kasir adalah **pintu masuk data** (pemasukan & pengeluaran harian); owner adalah **pembaca
+dan pengatur**. Area owner dibagi tiga: **Monitor** (dashboard, rekap bulanan, transaksi),
+**Manajemen** (pengeluaran, dana cadangan, impor data), **Admin** (katalog, kategori
+pengeluaran, pengaturan usaha, akun kasir).
+
+## 3. Cakupan
+
+### Kasir (`/kasir`) — HP/tablet, harus jalan offline
+
+- Pilih layanan dari katalog (grid tombol besar) → keranjang (qty, plat nomor opsional) →
+  Bayar (Tunai/QRIS/Transfer, kembalian besar) → nota. Target **≤ 4 ketukan**.
+- Nota: cetak Bluetooth (ESC/POS), print browser, kirim WhatsApp.
+- Pengeluaran laci (tombol lebih kecil): nominal, kategori yang diizinkan owner, catatan.
+- Riwayat & ringkasan hari ini (per metode, uang laci seharusnya), batal hari ini dengan alasan.
+- Offline: semua catatan masuk antrean lalu sinkron otomatis; jumlah antrean selalu terlihat.
+
+### Owner (`/owner`) — wajib online
+
+- **Monitor:** dashboard per periode (KPI & panel bisa diatur per usaha), tingkatan profit,
+  tren harian/bulanan, layanan terlaris, jam × hari tersibuk, komposisi pengeluaran per
+  kategori & jenis; rekap bulanan tanggal × kategori (format Excel lama); daftar transaksi
+  dengan filter & ekspor.
+- **Manajemen:** pengeluaran owner (gaji bulanan, cicilan, sewa…), dana cadangan
+  (setor/tarik), impor riwayat dari Excel arus kas.
+- **Admin:** katalog layanan, kategori pengeluaran (jenis + izin kasir), pengaturan & brand
+  usaha (nama, logo, warna, nota, zona waktu, saldo awal kas, template), akun kasir,
+  tambah usaha dari template.
+
+### Di luar cakupan
+
+Lihat bagian 13 (Ditunda). Ide baru dicatat di sana dan diusulkan ke owner — tidak dibangun
+diam-diam (YAGNI).
+
+## 4. Ukuran keberhasilan (Rilis 1: "Saimara live")
+
+1. Kasir Saimara mencatat **setiap** penjualan dan pengeluaran laci di Kasiko, termasuk saat
+   internet putus, tanpa kehilangan data.
+2. Owner **berhenti mengisi Excel**: rekap bulanan Kasiko menggantikan sheet bulanan, dan
+   riwayat 2025–2026 sudah diimpor.
+3. Angka bisa dipercaya: rumus diuji di aplikasi (Vitest) **dan** di database (pgTAP) dengan
+   kasus yang sama; impor Excel Saimara cocok sampai rupiah.
+4. Data aman: kasir tidak bisa melihat rekap atau usaha lain, tidak ada hapus permanen, setiap
+   perubahan harga/pengaturan dan pembatalan owner tercatat.
+
+---
+
+## 5. Keputusan Terkunci
+
+Nomor dipertahankan karena dirujuk di kode dan migrasi. Bila dua keputusan bertentangan,
+**yang lebih baru berlaku** dan ditandai di sini.
+
+### Produk (disetujui awal proyek)
 
 | # | Topik | Keputusan |
 |---|-------|-----------|
-| 1 | Tenancy | Satu owner, banyak usaha. Semua data bisnis punya `business_id`. Belum ada pendaftaran publik/SaaS, tapi skema jangan menghalangi ke sana. |
-| 2 | Katalog | Jasa dengan **harga tetap per item**, tanpa varian, tanpa stok. Item dikelompokkan dalam **kategori**; kategori, item, harga, dan urutan diatur owner. Kasir hanya memilih. |
-| 3 | Pembayaran | **Tunai, QRIS, Transfer** — non-tunai dicatat manual (kasir menandai sudah dibayar). Tidak ada payment gateway. Kembalian hanya untuk tunai. Rekap memisahkan per metode. |
-| 4 | Akun kasir | **Satu akun kasir per usaha**, login sekali di perangkat. Tidak ada pencatatan per orang. Owner pakai akun sendiri. |
-| 5 | Nota | Tiga cara: (a) cetak langsung ke printer thermal **Bluetooth** (ESC/POS via Web Bluetooth), (b) **dialog print browser**, (c) **kirim WhatsApp**. Tombol Bluetooth hanya muncul jika `navigator.bluetooth` tersedia. |
-| 6 | Pengeluaran | **Kasir**: pengeluaran harian kecil yang diambil dari uang laci (sumber `drawer`). **Owner**: pengeluaran besar (gaji, sewa, listrik) — mengurangi profit tapi tidak mengurangi uang laci (sumber `owner`). Kategori pengeluaran diatur owner (default: Bahan, Operasional, Gaji, Sewa, Lain-lain). Di UI kasir, tombol Pengeluaran **lebih kecil** dari tombol transaksi. |
-| 7 | Offline | **Kasir tetap jalan offline**: katalog tersimpan lokal, transaksi & pengeluaran masuk antrean (outbox) lalu sinkron otomatis saat online. Nota tetap bisa dicetak offline. **Owner wajib online.** |
-| 8 | Dana cadangan | "Dana dingin" per usaha: saldo dengan riwayat **setor/tarik**, penarikan wajib alasan. **Tidak mengubah profit**, tapi mengurangi **kas bebas**. Tanpa penyisihan otomatis. |
-| 9 | Rekap & analisis | Rekap inti + grafik tren, layanan terlaris, jam & hari tersibuk, komposisi pengeluaran per kategori, perbandingan dengan periode sebelumnya, ekspor Excel/CSV. Tampilan lintas usaha: **struktur disiapkan saja**, tidak dibangun. |
-| 10 | Branding | Per usaha: nama, logo, alamat, telepon, teks penutup nota, **satu warna utama**. Tampil di header kasir dan nota. Nama/ikon PWA saat di-install tetap generik. |
-| 11 | Koreksi | Tidak ada hapus permanen. Kasir bisa **membatalkan** transaksi/pengeluaran **hari yang sama** dengan alasan wajib; owner bisa membatalkan kapan saja dan melihat daftar pembatalan. |
-| 12 | Data kendaraan | **Plat nomor opsional** per transaksi, tampil di nota. Tidak menyimpan data pelanggan. Nomor WhatsApp hanya dipakai untuk membuka link kirim, **tidak disimpan**. |
+| 1 | Tenancy | Satu owner, banyak usaha. Semua data bisnis punya `business_id`. Tidak ada pendaftaran publik/SaaS, tapi skema tidak menghalangi ke sana. |
+| 2 | Katalog | Jasa dengan **harga tetap per item**, tanpa varian/stok, dikelompokkan dalam kategori. Kategori, item, harga, urutan diatur owner; kasir hanya memilih. |
+| 3 | Pembayaran | **Tunai, QRIS, Transfer** — non-tunai dicatat manual ("sudah dibayar"). Tanpa payment gateway. Kembalian hanya untuk tunai. Rekap memisahkan per metode. |
+| 4 | Akun kasir | **Satu akun kasir per usaha**, login sekali di perangkat. Tidak ada pencatatan per orang. |
+| 5 | Nota | (a) printer thermal **Bluetooth** (ESC/POS via Web Bluetooth, tombol hanya muncul bila `navigator.bluetooth` ada), (b) print browser, (c) WhatsApp. |
+| 6 | Pengeluaran | **Laci** (`drawer`, dicatat kasir, mengurangi uang laci) dan **owner** (`owner`, tidak mengurangi laci). Kategori diatur owner per usaha — default dari template (#25). Tombol Pengeluaran di kasir **lebih kecil** dari tombol transaksi. |
+| 7 | Offline | **Kasir tetap jalan offline** (katalog lokal, outbox, sinkron otomatis, nota tetap bisa dicetak). **Owner wajib online.** |
+| 8 | Dana cadangan | Saldo per usaha dengan riwayat setor/tarik; tarik wajib alasan. **Tidak mengubah profit**, tetapi mengurangi kas bebas. Tanpa penyisihan otomatis. |
+| 9 | Rekap & analisis | Rekap inti, tren, layanan terlaris, jam & hari tersibuk, komposisi pengeluaran, perbandingan periode sebelumnya, ekspor Excel/CSV. Tampilan lintas usaha: struktur disiapkan saja. |
+| 10 | Branding | Per usaha: nama, logo, alamat, telepon, teks penutup nota, **satu warna utama** — di header kasir & nota. Nama/ikon PWA tetap generik. |
+| 11 | Koreksi | **Tidak ada hapus permanen.** Kasir membatalkan data **hari yang sama** dengan alasan; owner kapan saja dan bisa melihat daftar pembatalan. |
+| 12 | Data kendaraan | Plat nomor opsional, tampil di nota. Tidak menyimpan data pelanggan; nomor WhatsApp tidak disimpan. |
 
-### Keputusan tambahan — 2026-10-12 (owner menyetujui hasil analisis gap)
+### Teknis (2026-10-12)
 
 | # | Topik | Keputusan |
 |---|-------|-----------|
-| 13 | Stack & UI | Stack bagian 3 **dikonfirmasi**. UI memakai **shadcn/ui** (base Radix, preset Nova) di `src/components/ui` — kode vendor, diperbarui lewat `shadcn add`. Kode aplikasi ditulis sendiri; **tanpa template admin/boilerplate**. `radix-ui` dipin versi persis. |
-| 14 | Sinkron kasir | Bukan `upsert` tabel (bentrok dengan larangan `update` untuk kasir & tidak atomik). Pakai RPC **`create_transaction(jsonb)`** / **`create_expense(jsonb)`**: header + item dalam satu transaksi DB, `ON CONFLICT (id) DO NOTHING`, mengembalikan baris yang ada → idempoten. |
-| 15 | Validasi server | Server menghitung ulang `line_total = price_snapshot × qty`, `total = Σ line_total`, kembalian tunai, dan konsistensi kolom per metode. **Harga snapshot dari client diterima** (katalog offline bisa basi) — tidak ditolak karena beda dengan harga katalog terkini. |
-| 16 | Perangkat & nota | Tabel **`devices`**: `device_code` (1–2 huruf) **dibagikan server** saat registrasi (login pertama, online), unik per usaha, **tidak pernah dipakai ulang**. Data browser terhapus → registrasi ulang dengan kode baru, sehingga nomor nota tidak pernah bentrok. |
-| 17 | Waktu | `occurred_at` dari perangkat + kolom **`received_at`** (diisi server). Selisih di atas ambang (ditetapkan di milestone 1) ditandai untuk ditinjau owner. |
-| 18 | Batal offline | Aturan "hari yang sama" dinilai dari **waktu permintaan batal di perangkat** (`voided_at`), bukan waktu sinkron, dengan batas toleransi di server. |
-| 19 | Integritas multi-usaha | Referensi kategori memakai **FK komposit `(business_id, id)`** agar tidak bisa menunjuk data usaha lain. Kasir membaca branding lewat **view/kolom khusus** (tanpa `opening_cash`). |
+| 13 | Stack & UI | Stack bagian 6. UI **shadcn/ui** (Radix, preset Nova) di `src/components/ui` (kode vendor, diperbarui lewat `shadcn add`); kode aplikasi ditulis sendiri, tanpa template admin. `radix-ui` dipin versi persis. |
+| 14 | Sinkron kasir | RPC **`create_transaction(jsonb)`** / **`create_expense(jsonb)`**: header + item satu transaksi DB, idempoten pada `id` dari perangkat. Bukan `upsert` tabel. |
+| 15 | Validasi server | Server menghitung ulang subtotal, total, kembalian, dan konsistensi per metode. **Harga snapshot dari perangkat diterima** (katalog offline bisa basi). |
+| 16 | Perangkat & nota | Tabel `devices`: `device_code` 1–2 huruf **dibagikan server**, unik per usaha, **tidak pernah dipakai ulang**. Data browser terhapus → registrasi ulang dengan kode baru. |
+| 17 | Waktu | `occurred_at` dari perangkat + `received_at` dari server; selisih di atas ambang ditandai `needs_review` (ambang: #32). |
+| 18 | Batal offline | "Hari yang sama" dinilai dari **waktu permintaan batal di perangkat**, dengan toleransi di server (#32). |
+| 19 | Integritas | Referensi dalam satu usaha memakai **FK komposit `(business_id, id)`**. Kasir membaca branding lewat view `business_branding` (tanpa `opening_cash`). |
 | 20 | Outbox aman | Minta `navigator.storage.persist()`; **logout diblokir** selama outbox belum kosong; jumlah antrean selalu terlihat. |
-| 21 | Audit | Tabel **`audit_log`** untuk perubahan harga/katalog/pengaturan dan pembatalan owner (milestone 1). |
-| 22 | Akun | Pendaftaran publik **dimatikan** (`enable_signup = false`, password ≥ 8 huruf+angka). Owner pertama dibuat lewat skrip *bootstrap*. Reset/nonaktif akun kasir mencabut semua sesi. |
-| 23 | Mode pratinjau | Selama database belum dibuat, `src/features/preview/` menjadi pengganti data sementara (localStorage, sinkron antar-tab) dengan bentuk data yang sama. Validasi memakai fungsi murni yang sama dengan yang akan dipakai RPC. **Dihapus saat lapisan Supabase dibangun.** |
+| 21 | Audit | Tabel `audit_log` untuk perubahan harga/katalog/pengaturan/akun dan pembatalan owner. |
+| 22 | Akun | Pendaftaran publik **dimatikan**; kata sandi ≥ 8 huruf+angka. Owner pertama dibuat lewat *bootstrap* (#33). Reset/nonaktif akun kasir mencabut semua sesi. |
+| 23 | Mode pratinjau | `src/features/preview/` (localStorage) menggantikan database sementara dengan bentuk data yang sama. **Dihapus saat lapisan Supabase dibangun** (Rilis 1, langkah R1). |
 
-### Keputusan tambahan — 2026-10-19 (owner menyetujui hasil audit Excel "Saimara Cash Flow")
-
-| # | Topik | Keputusan |
-|---|-------|-----------|
-| 24 | Jenis pengeluaran & profit | Setiap kategori pengeluaran punya `kind`: **operating** (operasional), **non_operating** (cicilan utang, aset/renovasi), **drawing** (prive owner/keluarga). Profit operasional = Pemasukan − operasional; **Profit bersih = Profit operasional − non-operasional**; **prive tidak mengurangi profit** tetapi tetap mengurangi kas bebas; Arus kas bersih = Pemasukan − semua pengeluaran (= "Total Net Profit" di Excel lama). Menggantikan rumus inti bagian 1 untuk kategori non-operasional/prive. |
-| 25 | Templateable per usaha | Usaha dibuat dari **template** (`src/features/business/templates.ts`: katalog, kategori pengeluaran + jenis + izin kasir, tata letak dashboard, alias label impor). Menerapkan template hanya **menambah yang belum ada**, tidak pernah mengubah/menghapus. Konfigurasi owner per usaha (`business_configs`): template asal, tata letak dashboard (KPI & panel, urutan, tampil/sembunyi), pemetaan label impor. Owner dibagi tiga area: **Monitor** (dashboard, rekap bulanan, transaksi), **Manajemen** (pengeluaran, cadangan, impor), **Admin** (katalog, kategori pengeluaran, pengaturan, akun kasir). Kasir = pintu masuk pemasukan & pengeluaran. |
-| 26 | Kategori di kasir | Kolom `allow_drawer` per kategori: hanya kategori aktif + diizinkan owner yang tampil di kasir; RPC `create_expense` menolak kategori lain untuk kasir. Gaji komisi harian **tetap diisi manual** (tidak dihitung otomatis). "Gratis cuci" = biaya komisi pekerja untuk cuci gratis/promo. |
-| 27 | Data historis (impor Excel) | Tabel `historical_days` (per hari: pendapatan + pengeluaran per kategori) dari impor spreadsheet format arus kas bulanan. **Hanya untuk analisis** (dashboard, tren, rekap): tidak memengaruhi kas bebas, uang laci, atau daftar transaksi. Hari yang sudah punya data kasir dilewati; impor ulang mengganti hari yang sama. File Excel owner **tidak pernah di-commit** (`*.xlsx` di `.gitignore`) dan tidak ada angkanya di kode/seed. |
-| 28 | Rekap bulanan & ekspor | Rekap bulanan berbentuk tabel tanggal × kategori seperti Excel owner; ekspor Excel memakai format yang sama (satu sheet per bulan) sehingga bisa diimpor balik. |
-
-### Keputusan tambahan — 2026-10-20
+### Hasil audit Excel Saimara (2026-10-19)
 
 | # | Topik | Keputusan |
 |---|-------|-----------|
-| 29 | Label impor tak jelas | Label Excel yang tidak jelas ("haga", "Oktober", "Finance", "Kasir titip", dan label tak dikenal lain) **tidak dipetakan dan tidak diimpor** (pilihan "Tidak diimpor", jumlahnya tetap ditampilkan). Jika nanti perlu, owner menambah kategorinya sendiri di Admin → Kategori Pengeluaran (sakelar "Tampil di kasir" → muncul di kasir) lalu memilihnya saat impor. Template tidak punya kategori cadangan. |
-| 30 | Upah harian | Upah kasir & driver harian **diambil dari uang laci** (`allow_drawer = true`). |
-| 31 | Katalog Saimara | Tidak memakai data Olsera; katalog & harga **dibangun owner dari awal** di Admin → Katalog. Harga di template hanya contoh. |
-| 32 | Database (milestone 1) | Skema di `supabase/migrations` (4 file) dengan dua peran lewat `business_members` (`owner` / `cashier`, satu akun satu peran, satu kasir per usaha, `is_active` mencabut akses seketika). Ambang waktu perangkat (keputusan #17/#18): **> 5 menit di depan** atau **> 72 jam terlambat** → `needs_review`; pembatalan kasir di luar ambang ditolak. Retry pembatalan hanya idempoten bila membawa waktu perangkat yang sama. Data historis disimpan ternormalisasi (`historical_days` + `historical_expenses` dengan FK kategori). `seed.sql` hanya untuk lokal dan dihasilkan dari template. |
-| 33 | Proyek & Edge Function | Owner memakai **proyek Supabase yang sudah ada** (tanpa Docker lokal); kredensial hanya di file lokal yang di-ignore, tidak pernah di repo. Migrasi diterapkan dengan `supabase db push --db-url` lewat session pooler IPv4. Transaksi & pengeluaran tetap lewat **RPC** (langsung ke database, bisa offline — keputusan #14). **Edge Function hanya untuk operasi ber-hak service role:** `manage-cashier` (owner membuat/reset/nonaktifkan akun kasir; username → email `@kasir.kasiko.invalid`) dan `bootstrap-owner` (membuat akun owner + usaha pertama; hanya dengan service key). Akun owner ditandai `app_metadata.kasiko_role = 'owner'`; `create_business` menolak akun lain, sehingga pendaftaran liar tidak bisa membuat usaha walau sign-up terbuka. |
+| 24 | Jenis pengeluaran & profit | Kategori punya `kind`: **operating**, **non_operating** (cicilan, aset/renovasi), **drawing** (prive owner/keluarga). Profit operasional = Pemasukan − operasional; **Profit bersih = Profit operasional − non-operasional**; **prive tidak mengurangi profit** tetapi mengurangi kas bebas; Arus kas bersih = Pemasukan − semua pengeluaran (= "Total Net Profit" Excel lama). *Menggantikan rumus "Profit = Pemasukan − Pengeluaran" versi awal.* |
+| 25 | Templateable per usaha | Usaha dibuat dari **template** (`src/features/business/templates.ts`: katalog, kategori pengeluaran + jenis + izin kasir, tata letak dashboard, alias label impor). Menerapkan template hanya **menambah yang belum ada**. Konfigurasi owner per usaha di `business_configs`. Owner: Monitor / Manajemen / Admin. |
+| 26 | Kategori di kasir | `allow_drawer` per kategori: hanya kategori aktif + diizinkan yang tampil di kasir; server menolak yang lain. Gaji komisi harian **diisi manual**. "Gratis cuci" = biaya komisi pekerja untuk cuci gratis/promo. |
+| 27 | Data historis | Impor Excel arus kas → `historical_days` + `historical_expenses`. **Hanya untuk analisis**: tidak memengaruhi kas bebas, uang laci, atau daftar transaksi. Hari yang punya data kasir dilewati; impor ulang mengganti. File Excel **tidak pernah di-commit**, angkanya tidak ada di kode/seed. |
+| 28 | Rekap bulanan & ekspor | Tabel tanggal × kategori seperti Excel owner; ekspor Excel memakai format yang sama sehingga bisa diimpor balik. |
+
+### Database & infrastruktur (2026-10-20)
+
+| # | Topik | Keputusan |
+|---|-------|-----------|
+| 29 | Label impor tak jelas | Label yang tidak jelas/tak dikenal **tidak diimpor** (jumlahnya tetap ditampilkan) sampai owner membuat kategorinya sendiri. Template tidak punya kategori cadangan. |
+| 30 | Upah harian | Upah kasir & driver harian diambil **dari uang laci**. |
+| 31 | Katalog Saimara | Tidak memakai data Olsera; katalog & harga **dibangun owner dari awal**. Harga di template hanya contoh. |
+| 32 | Skema database | Migrasi di `supabase/migrations`. Dua peran via `business_members` (satu akun satu peran, satu kasir per usaha, `is_active` memutus akses seketika). Ambang waktu perangkat: **> 5 menit di depan** atau **> 72 jam terlambat** → `needs_review`; batal kasir di luar ambang ditolak. Retry batal idempoten hanya bila membawa waktu perangkat yang sama. `seed.sql` hanya untuk lokal, dihasilkan dari template. |
+| 33 | Proyek & Edge Function | Memakai **proyek Supabase owner yang sudah ada**, tanpa Docker lokal. Kredensial hanya di file lokal ter-ignore. Data harian lewat **RPC/RLS** (langsung ke database, cocok untuk offline). **Edge Function hanya untuk operasi ber-hak service role:** `manage-cashier` dan `bootstrap-owner`. Akun owner ditandai `app_metadata.kasiko_role = 'owner'`; hanya akun itu yang boleh `create_business`. |
 
 ---
 
-## 3. Stack Teknis
+## 6. Arsitektur & stack
 
-> Dikonfirmasi owner 2026-10-12 (keputusan #13).
+```
+Perangkat kasir (PWA)                     Perangkat owner (browser)
+  React + Dexie (katalog, outbox)            React (+ TanStack Query*)
+        │  RPC create_* / void_* (idempoten)      │ select via RLS, RPC rekap
+        ▼                                          ▼
+  ┌──────────────── Supabase (proyek owner, region ap-northeast-1) ────────────────┐
+  │ Postgres: RLS di semua tabel · RPC tulis · fungsi rekap · audit                 │
+  │ Auth: email/password, sign-up publik mati                                       │
+  │ Edge Functions: manage-cashier (owner) · bootstrap-owner (service key)          │
+  │ Storage*: logo usaha                                                            │
+  └─────────────────────────────────────────────────────────────────────────────────┘
+* = belum dibangun
+```
 
-- **Frontend:** React 19 + Vite + TypeScript (strict + `noUncheckedIndexedAccess`), React Router, Tailwind CSS v4, **shadcn/ui** (Radix) + lucide-react, sonner (toast).
-- **Kualitas:** ESLint *type-aware* (`no-floating-promises` wajib), Prettier, Node ≥ 24 (`.nvmrc`). `npm run check` = typecheck + lint + format + tes.
-- **PWA:** `vite-plugin-pwa` (Workbox) — precache app shell, `registerType: 'prompt'` dengan banner "Versi baru tersedia".
-- **Data lokal/offline:** IndexedDB via Dexie (cache katalog + outbox).
-- **Server state:** TanStack Query.
-- **Backend:** Supabase — Postgres, Auth (email + password), Row Level Security, Storage (logo), Edge Functions (pembuatan akun kasir).
-- **Grafik:** Recharts via komponen chart shadcn (hanya di chunk owner). **Ekspor:** SheetJS dari CDN resmi SheetJS (paket `xlsx` di npm berhenti di 0.18.5 dengan CVE) + CSV.
-- **Tes:** Vitest (logika murni + integrasi komponen), pgTAP via `supabase test db` (RLS & fungsi SQL), Playwright (E2E, tiap spec dijalankan di 3 perangkat: `phone`, `tablet`, `desktop`).
-- **Hosting:** situs statis (Vercel / Netlify / Cloudflare Pages).
-- Satu aplikasi, dua area: `/kasir/*` dan `/owner/*`. Kode owner (grafik, ekspor) di-*lazy load* agar bundle kasir tetap ringan.
-
-Struktur folder yang disarankan:
+- **Frontend:** React 19 + Vite + TypeScript (strict + `noUncheckedIndexedAccess`), React Router,
+  Tailwind CSS v4, shadcn/ui + lucide-react, sonner. Grafik Recharts (chunk owner saja).
+  Ekspor/impor Excel: SheetJS dari CDN resmi (`xlsx` di npm berhenti di 0.18.5 dengan CVE).
+- **Offline:** `vite-plugin-pwa` (prompt "Versi baru tersedia"), Dexie (cache katalog + outbox).
+- **Server state owner:** TanStack Query — *tercantum sejak awal tetapi belum dipasang*;
+  dipasang saat R1.
+- **Backend:** Supabase (Postgres, Auth, RLS, Edge Functions, Storage).
+- **Kualitas:** ESLint type-aware (`no-floating-promises` wajib), Prettier, Node ≥ 24.
+  `npm run check` = typecheck + lint + format + Vitest. `npm run test:e2e` = Playwright di
+  `phone`, `tablet`, `desktop`. `npm run db:test` = pgTAP ke database proyek tanpa Docker
+  (setiap file di-rollback).
+- **Hosting:** situs statis (Vercel / Netlify / Cloudflare Pages) — *belum dipilih*.
+- Satu aplikasi, dua area (`/kasir`, `/owner`); kode owner di-lazy-load agar bundle kasir ringan.
 
 ```
 src/
-  app/            # router, layout, guard peran
+  app/            router, layout, guard peran
   features/
-    auth/
-    business/     # pemilih usaha, branding, tema, template & konfigurasi per usaha
-    catalog/
-    pos/          # layar kasir, keranjang, pembayaran
-    receipt/      # format nota, ESC/POS, print browser, WhatsApp
-    expenses/     # pengeluaran, kategori (jenis + izin kasir)
-    history/      # impor spreadsheet arus kas (data historis)
-    offline/      # Dexie db, outbox, sync engine
-    reports/      # rekap & analisis (lazy)
-    reserve/      # dana cadangan
-  lib/            # supabase client, money, date/timezone utils
+    auth/  business/  catalog/  pos/  receipt/  expenses/
+    history/      impor Excel arus kas
+    offline/      Dexie, outbox, sync engine
+    reports/      rekap & analisis (lazy)
+    reserve/      dana cadangan
+    preview/      PENGGANTI DATABASE SEMENTARA — dihapus di R1
+  lib/            supabase client, database.types.ts (generated), money, datetime
 supabase/
-  migrations/
-  functions/      # edge functions
-  tests/          # pgTAP
-  seed.sql
+  migrations/     sumber kebenaran skema
+  functions/      manage-cashier, bootstrap-owner, _shared (dites Vitest)
+  tests/          pgTAP
+  seed.sql        lokal saja, dihasilkan dari template
+scripts/          bootstrap-owner.ts, db-test.ts (rahasia dari .env.bootstrap)
 ```
 
 ---
 
-## 4. Model Data
+## 7. Data & aturan bisnis
 
-Semua uang disimpan sebagai **integer rupiah (`bigint`)** — tidak pernah float/numeric desimal.
-Semua waktu `timestamptz`; pengelompokan harian memakai `businesses.timezone`.
-Semua tabel bisnis punya `business_id`, `created_at`, `updated_at`.
+**Sumber kebenaran skema adalah `supabase/migrations`.** Ringkasan:
 
-```
-businesses
-  id uuid pk, owner_id uuid -> auth.users, name, logo_path, address, phone,
-  receipt_footer, primary_color (hex), receipt_prefix (mis. 'SMR'),
-  timezone (default 'Asia/Jakarta'), opening_cash bigint default 0, is_active
+| Tabel | Isi | Akses kasir |
+|-------|-----|-------------|
+| `businesses` | brand, prefix nota, zona waktu, saldo awal kas | lewat view `business_branding` |
+| `business_members` | user × usaha × peran (`owner`/`cashier`), `is_active` | baris miliknya |
+| `business_configs` | template asal, tata letak dashboard, pemetaan label impor | — |
+| `catalog_categories`, `catalog_items` | layanan & harga | yang aktif |
+| `expense_categories` | `kind`, `allow_drawer` | aktif + diizinkan |
+| `devices` | kode perangkat 1–2 huruf | usahanya |
+| `transactions`, `transaction_items` | penjualan (id dari perangkat), item snapshot berurutan | **hari ini** saja |
+| `expenses` | `drawer` / `owner` | `drawer` **hari ini** saja |
+| `reserve_movements` | setor/tarik cadangan (append-only) | — |
+| `historical_days`, `historical_expenses` | impor Excel | — |
+| `audit_log` | jejak perubahan & pembatalan owner | — |
 
-business_members
-  business_id, user_id, role ('owner' | 'cashier'), pk(business_id, user_id)
-  -- owner: satu baris per usaha miliknya; akun kasir: tepat satu usaha
+**Uang** selalu integer rupiah (`bigint`). **Waktu** `timestamptz`; batas hari memakai zona
+waktu usaha.
 
-catalog_categories
-  id, business_id, name, sort_order, is_active
+### Rumus (diimplementasikan di `src/features/reports/finance.ts` **dan** fungsi SQL, diuji dengan kasus yang sama)
 
-catalog_items
-  id, business_id, category_id, name, price bigint (>= 0), sort_order, is_active
-  -- item dinonaktifkan, bukan dihapus, bila sudah pernah dipakai transaksi
+Untuk periode `[from, to)`, hanya baris paid/active:
 
-transactions
-  id uuid (DIBUAT DI CLIENT — kunci idempotensi sync offline)
-  business_id, receipt_no (unik per business), occurred_at (waktu di perangkat),
-  plate_number nullable, payment_method ('cash' | 'qris' | 'transfer'),
-  total bigint, cash_received bigint nullable, change_amount bigint nullable,
-  status ('paid' | 'void'), void_reason, voided_at, voided_by,
-  created_by, device_id
+- Pemasukan = Σ total transaksi (+ pendapatan hari impor)
+- Pengeluaran = Σ semua pengeluaran (semua sumber & jenis, + hari impor)
+- Profit operasional = Pemasukan − operasional
+- **Profit bersih** = Profit operasional − non-operasional (prive tidak dihitung)
+- Arus kas bersih = Pemasukan − semua pengeluaran
+- Saldo cadangan = Σ setor − Σ tarik (sepanjang waktu)
+- Kas bebas = saldo awal kas + Σ pemasukan − Σ pengeluaran − Σ setor(`cash`) + Σ tarik
+  — data impor **tidak** ikut; setor `capital` = uang baru owner, tidak mengurangi kas bebas.
+  *Rumus ini turunan agent dari #8 — konfirmasi owner masih tertunda (Pertanyaan #9).*
+- Uang laci seharusnya (hari ini) = Σ penjualan tunai − Σ pengeluaran laci.
 
-transaction_items
-  id, transaction_id, catalog_item_id nullable,
-  name_snapshot, price_snapshot bigint, qty int (> 0), line_total bigint
-  -- snapshot wajib: perubahan harga katalog tidak boleh mengubah transaksi lama
+### Nomor nota
 
-expense_categories
-  id, business_id, name, sort_order, is_active,
-  kind ('operating' | 'non_operating' | 'drawing'),   -- keputusan #24
-  allow_drawer bool                                    -- tampil di kasir, keputusan #26
-
-expenses
-  id uuid (DIBUAT DI CLIENT untuk sumber drawer), business_id, category_id,
-  amount bigint (> 0), note, source ('drawer' | 'owner'),
-  occurred_at, status ('active' | 'void'), void_reason, voided_at, voided_by,
-  created_by, device_id
-
-business_configs                                       -- keputusan #25, hanya owner
-  business_id pk, template_id, dashboard jsonb, import_mapping jsonb
-
-devices                                                -- keputusan #16
-  id, business_id, device_code (1–2 huruf, unik per usaha, tak pernah dipakai ulang),
-  registered_by, registered_at
-
-historical_days                                        -- keputusan #27, hanya owner
-  business_id, day_key date, income bigint (>= 0), imported_at, imported_by,
-  pk(business_id, day_key)
-historical_expenses
-  business_id, day_key, category_id (FK komposit), amount bigint (> 0)
-
-audit_log                                              -- keputusan #21, hanya owner baca
-  business_id, actor_id, action, entity, entity_id, old_data, new_data, created_at
-
--- transactions & expenses juga punya received_at (server) dan needs_review (generated);
--- transaction_items punya position (urutan di nota). Lihat supabase/migrations.
-
-reserve_movements
-  id, business_id, type ('deposit' | 'withdraw'), amount bigint (> 0),
-  source ('cash' | 'capital')   -- hanya untuk deposit: dari kas usaha atau modal baru owner
-  reason (WAJIB untuk withdraw), occurred_at, created_by
-```
-
-### Rumus keuangan (implementasikan sebagai fungsi SQL + tes)
-
-Untuk periode `[from, to)` per usaha, hanya baris `status` aktif/paid:
-
-- **Pemasukan** = Σ `transactions.total`
-- **Pengeluaran** = Σ `expenses.amount` (semua sumber, semua jenis)
-- **Profit operasional** = Pemasukan − Σ pengeluaran `operating`
-- **Profit (bersih)** = Profit operasional − Σ pengeluaran `non_operating` (prive tidak dihitung — keputusan #24)
-- **Arus kas bersih** = Pemasukan − Pengeluaran (semua, termasuk prive)
-- Data historis (keputusan #27) ikut dalam pemasukan/pengeluaran/profit periode, **tidak** dalam kas bebas & uang laci
-- **Saldo cadangan** = Σ deposit − Σ withdraw (sepanjang waktu)
-- **Kas bebas** = `opening_cash` + Σ pemasukan − Σ pengeluaran − Σ deposit(`source='cash'`) + Σ withdraw
-  - Deposit `capital` = uang baru dari owner, langsung masuk cadangan (tidak mengurangi kas bebas).
-  - Withdraw mengembalikan uang ke kas bebas; jika uangnya lalu dipakai, catat sebagai pengeluaran biasa.
-  - Setor/tarik cadangan **tidak pernah** mengubah profit.
-- **Uang laci seharusnya (hari ini)** = Σ transaksi tunai − Σ pengeluaran `drawer` hari ini.
-
-> Rumus kas bebas di atas adalah turunan agent dari keputusan #8 — tunjukkan ke owner
-> saat membangun fitur cadangan dan minta konfirmasi.
-
-### Nomor nota (harus aman offline)
-
-Format: `{receipt_prefix}-{YYMMDD}-{device_code}{seq}` — contoh `SMR-261009-A0007`.
-`device_code` 1 huruf dibuat saat perangkat pertama kali login dan disimpan lokal;
-`seq` counter harian per perangkat di IndexedDB. Ada constraint unik `(business_id, receipt_no)`.
+`{prefix}-{YYMMDD}-{kode perangkat}{urut 4 digit}`, contoh `SMR-261009-A0007`. Kode perangkat
+dari server (#16), nomor urut harian per perangkat di IndexedDB, unik per usaha di database.
 
 ---
 
-## 5. Keamanan & Akses (RLS)
+## 8. Keamanan
 
-- RLS **aktif di semua tabel**. Pembatasan akses dijaga di database, bukan hanya di UI.
-- Helper SQL: `is_member(business_id)`, `is_owner(business_id)` (`security definer`, `stable`).
-- **Owner:** akses penuh ke data usaha miliknya.
-- **Kasir:**
-  - `select` katalog & kategori aktif, branding usahanya.
-  - `insert` transaksi, item transaksi, dan pengeluaran `source='drawer'` untuk usahanya.
-  - `select` transaksi & pengeluaran **hari ini** saja (riwayat hari ini).
-  - Tidak boleh `update`/`delete` langsung. Pembatalan lewat RPC `void_transaction(id, reason)` /
-    `void_expense(id, reason)` yang memeriksa: peran, usaha yang sama, hari yang sama (zona waktu usaha), alasan tidak kosong.
-  - Tidak boleh melihat rekap, cadangan, pengeluaran owner, atau usaha lain.
-- **Pembuatan/reset akun kasir:** Edge Function `manage-cashier` (memakai service role di server),
-  hanya bisa dipanggil owner usaha tersebut.
-- **`service_role` key tidak boleh ada di kode frontend atau di repo.** `.env` masuk `.gitignore`; sediakan `.env.example`.
-- Insert transaksi menghitung ulang/validasi total di server (trigger atau RPC `create_transaction`)
-  — jangan percaya total dari client mentah-mentah.
+- RLS aktif di **semua** tabel; `anon` tidak punya akses apa pun. Hak `authenticated` diberikan
+  per kolom sehingga kolom identitas (id, `business_id`, pemilik) tidak bisa diubah.
+- Kasir tidak bisa `insert/update/delete` langsung ke transaksi/pengeluaran — hanya lewat RPC
+  yang memeriksa peran, usaha, perangkat, hari, dan alasan.
+- **Kunci `service_role`/`sb_secret_` tidak pernah ada di frontend atau repo.** Rahasia lokal
+  di `supabase se.txt` dan `.env.bootstrap` (keduanya ter-ignore). Frontend hanya memakai
+  kunci publishable/anon.
+- Akun owner ditandai `app_metadata` oleh server; pendaftaran liar tidak bisa membuat usaha.
+- Menonaktifkan kasir: `business_members.is_active = false` (akses data putus seketika) +
+  ban akun + semua sesi dicabut.
 
 ---
 
-## 6. UI Kasir (harus sesederhana mungkin)
+## 9. Spesifikasi UI singkat
 
-Target: transaksi biasa selesai dalam **≤ 4 ketukan** (pilih item → Bayar → Uang pas → Simpan/Cetak).
+**Kasir** — header berwarna brand (logo, nama, indikator online/offline + jumlah antrean);
+kategori → grid tombol layanan besar; keranjang (HP: panel bawah, tablet/laptop: berdampingan);
+pembayaran dengan tombol cepat (Uang Pas, pecahan di atas total), keypad, kembalian besar,
+Simpan nonaktif bila uang kurang; setelah simpan: Cetak / Print / WhatsApp / Transaksi Baru;
+format `Rp 35.000`.
 
-- **Header:** logo + nama usaha (warna utama brand), indikator online/offline + jumlah antrean belum sinkron.
-- **Pemilih kategori** (dropdown/tab sesuai pengaturan owner) → **grid tombol item besar** (nama + harga).
-- **Keranjang:** daftar item, qty +/−, total besar, kolom plat nomor opsional.
-- **Tombol Bayar** (besar) → layar pembayaran:
-  - Metode: Tunai / QRIS / Transfer.
-  - Tunai: tombol cepat (Uang Pas, nominal pecahan umum di atas total), keypad angka, **kembalian ditampilkan besar**; tombol simpan nonaktif jika uang kurang.
-  - QRIS/Transfer: konfirmasi "Sudah dibayar".
-- **Setelah simpan:** pilihan Cetak (Bluetooth) / Print / Kirim WhatsApp / Transaksi Baru.
-- **Tombol Pengeluaran** — lebih kecil, sekunder: nominal, kategori, catatan.
-- **Riwayat hari ini:** transaksi & pengeluaran hari ini, dengan aksi Batalkan (alasan wajib) dan Cetak ulang.
-- **Ringkasan hari ini:** total per metode + uang laci seharusnya.
-- Layout responsif: HP = satu kolom (keranjang sebagai panel bawah), tablet/laptop = grid + keranjang berdampingan.
-- Format rupiah `Rp 35.000` (`Intl.NumberFormat('id-ID')`), tanpa desimal.
+**Owner** — pemilih usaha + tambah usaha (warna utama berganti per usaha); periode Hari ini /
+7 hari / Bulan ini / Rentang + pembanding periode sebelumnya; tabel dengan filter (tanggal,
+metode, status, kategori, sumber, jenis) dan ekspor; pratinjau kasir & nota di pengaturan;
+pemeriksaan kontras WCAG untuk warna brand.
 
-## 7. UI Owner
+**Visual data** — warna seri tetap (bukan warna brand), palet divalidasi untuk buta warna;
+jenis pengeluaran: operasional oranye, non-operasional violet, prive aqua; tidak pernah
+warna saja tanpa label.
 
-- **Pemilih usaha** (dan tombol tambah usaha). Warna utama berganti per usaha agar tidak salah usaha.
-- **Dashboard:** pemasukan, pengeluaran, profit, saldo cadangan, kas bebas untuk periode terpilih
-  (Hari ini / Minggu / Bulan / Rentang bebas) + perbandingan periode sebelumnya.
-- **Analisis:** tren harian, layanan terlaris (qty & nilai), heatmap jam × hari, komposisi pengeluaran,
-  pemisahan per metode bayar. Agregasi dilakukan di **fungsi SQL/RPC**, bukan menarik semua baris ke client.
-- **Transaksi & Pengeluaran:** tabel dengan filter (tanggal, metode, status, kategori, sumber), daftar pembatalan, ekspor Excel/CSV.
-- **Pengeluaran owner:** form tambah (sumber `owner`).
-- **Dana cadangan:** saldo, riwayat, form setor (sumber kas/modal) & tarik (alasan wajib).
-- **Master data:** kategori & item katalog (tambah, ubah, urutkan, nonaktifkan), kategori pengeluaran.
-- **Pengaturan usaha / brand:** nama, logo (upload ke Storage), alamat, telepon, teks penutup nota,
-  warna utama (dengan pratinjau kasir & nota), prefix nota, zona waktu, saldo awal kas.
-- **Akun kasir:** buat, reset password, nonaktifkan.
-
-## 8. Nota
-
-- Isi: logo/nama, alamat, telepon, no. nota, tanggal-jam, plat nomor (jika ada), item × qty × harga,
-  total, metode, uang diterima & kembalian (tunai), teks penutup.
-- **Bluetooth:** ESC/POS via Web Bluetooth (Chrome Android & Chrome/Edge desktop; tidak tersedia di iOS).
-  Lebar kertas 58mm (32 karakter) / 80mm (48 karakter) diatur per perangkat (localStorage).
-  Simpan perangkat yang dipasangkan agar cetak berikutnya satu ketuk. Logo di nota thermal = opsional/fase berikut.
-- **Print browser:** halaman/komponen nota dengan CSS `@media print` lebar 58/80mm.
-- **WhatsApp:** buka `https://wa.me/62xxxxxxxxxx?text=<nota teks terformat>`; normalisasi nomor `08…` → `628…`.
-  Bekerja walau transaksi belum tersinkron. Nomor tidak disimpan.
-- Satu fungsi murni `formatReceipt(transaction, business, width) → lines[]` dipakai ketiga jalur (diuji dengan Vitest).
-
-## 9. Offline & Sinkronisasi
-
-- Service worker precache app shell; katalog + branding di-cache di IndexedDB dan di-refresh saat online.
-- Transaksi/pengeluaran kasir **selalu** ditulis dulu ke outbox lokal, lalu dikirim oleh sync engine
-  (saat online, saat event `online`, dan berkala). Pengiriman memakai RPC `create_transaction` / `create_expense` dengan `id` dari client → idempoten, aman diulang (keputusan #14).
-- Pembatalan saat offline juga masuk outbox (urut setelah insert-nya).
-- Gagal permanen (mis. ditolak RLS/validasi) → tandai di outbox dan tampilkan ke kasir, jangan dibuang diam-diam.
-- Sesi Supabase disimpan lokal; aplikasi kasir tetap bisa dibuka offline selama pernah login di perangkat itu.
-- Owner area: jika offline tampilkan pesan "Butuh koneksi internet".
+**Nota** — logo/nama, alamat, telepon, no. nota, waktu, plat, item × qty × harga, total,
+metode, uang diterima & kembalian, teks penutup. Satu fungsi murni
+`formatReceipt(transaction, business, width)` untuk ketiga jalur; lebar 58 mm (32 kolom) /
+80 mm (48 kolom) per perangkat.
 
 ---
 
-## 10. Urutan Pengerjaan (milestone)
+## 10. Status (evaluasi 2026-10-25)
 
-Kerjakan berurutan; tiap milestone diakhiri tes hijau dan demo singkat ke user.
+Legenda: ✅ selesai & teruji · 🟡 ada di **mode pratinjau** saja (belum memakai database) ·
+⬜ belum ada.
 
-0. **Fondasi:** scaffold Vite + TS + Tailwind + Router + ESLint/Prettier + Vitest; Supabase CLI lokal; `.env.example`; README cara menjalankan.
-   *Status 2026-10-12: selesai + pratinjau UI kasir & owner (data contoh), logika murni teruji, E2E 3 perangkat. Milestone 1 (database) ditunda atas permintaan owner.*
-1. **Database:** migrasi semua tabel, constraint, helper RLS, policy, RPC void, `seed.sql` (Saimara + katalog contoh). Tes pgTAP untuk RLS (kasir tidak bisa baca usaha lain, tidak bisa lihat rekap, tidak bisa void hari kemarin).
-   *Status 2026-10-20: 5 migrasi **diterapkan ke proyek Supabase owner** (keputusan #32–#33); 95 tes pgTAP hijau langsung di database proyek (dalam transaksi yang di-rollback, tanpa sisa data). Edge Function `manage-cashier` & `bootstrap-owner` + `scripts/bootstrap-owner.ts` sudah ditulis dan dites; **deploy menunggu login CLI dengan akun pemilik proyek**. Sign-up publik di proyek masih menyala — harus dimatikan di dashboard (Authentication → Sign In / Providers).*
-2. **Auth & peran:** login, redirect per peran, guard rute, pemilih usaha owner, tema warna per usaha.
-3. **Master data owner:** pengaturan usaha/brand + upload logo, katalog, kategori pengeluaran, Edge Function akun kasir.
-4. **Kasir online:** katalog, keranjang, pembayaran, kembalian, simpan, riwayat & ringkasan hari ini, pengeluaran laci, pembatalan.
-5. **Nota:** `formatReceipt`, print browser, WhatsApp, lalu Bluetooth ESC/POS.
-   *Status 2026-10-12: selesai di kode & teruji (unit + E2E print/WhatsApp). Bluetooth ESC/POS belum diuji dengan printer fisik — wajib diuji di milestone 9 (Pertanyaan Terbuka #3).*
-6. **Offline:** Dexie, outbox, sync engine, PWA install & update prompt, indikator status.
-   *Status 2026-10-12: selesai di sisi perangkat (Dexie outbox FIFO + backoff, registrasi perangkat, cache katalog, PWA prompt/install, logout diblokir saat antrean ada), teruji E2E offline→online. Tinggal mengganti `previewTransport` dengan transport RPC Supabase setelah milestone 1.*
-7. **Rekap & analisis:** fungsi SQL agregasi + dashboard + ekspor.
-   *Status 2026-10-19: di pratinjau sudah ada tingkatan profit, dashboard yang bisa diatur per usaha, rekap bulanan tanggal × kategori, ekspor Excel/CSV format spreadsheet owner, dan impor data historis (teruji dengan file Excel Saimara asli secara lokal: 22 bulan, 608 hari, arus kas cocok sampai rupiah). Fungsi SQL menyusul setelah milestone 1.*
-8. **Dana cadangan & kas bebas** (konfirmasi rumus dengan owner dulu).
-9. **Pengerasan:** E2E Playwright alur kasir (online & offline), audit aksesibilitas dasar, uji di HP Android nyata dengan printer.
+| Area | Status | Catatan |
+|------|--------|---------|
+| Fondasi kode, kualitas, CI lokal | ✅ | 216 tes Vitest, 33 E2E (3 perangkat), lint/format bersih |
+| Database: skema, RLS, RPC, rumus, audit | ✅ | 5 migrasi live di proyek; 95 tes pgTAP hijau di proyek |
+| Edge Function `manage-cashier`, `bootstrap-owner` | ✅ | ter-deploy & diuji penolakan aksesnya |
+| Akun owner & usaha Saimara di produksi | ✅ | dibuat 2026-10-25 dari template `cuci-mobil` |
+| Sign-up publik mati | ✅ | dimatikan owner di dashboard |
+| Login & peran memakai Supabase Auth | ⬜ | login masih tombol "Masuk sebagai…" pratinjau |
+| Data aplikasi dari database | ⬜ | 17 file masih memakai `features/preview` |
+| Kasir: POS, bayar, nota (print/WA), riwayat, ringkasan, batal, pengeluaran laci | 🟡 | lengkap di pratinjau; Bluetooth belum diuji printer fisik |
+| Offline: outbox, sync, registrasi perangkat, PWA | 🟡 | teruji offline→online dengan transport tiruan |
+| Owner Monitor: dashboard, rekap bulanan, transaksi + ekspor | 🟡 | agregasi dihitung di browser, bukan SQL |
+| Owner Manajemen: pengeluaran, cadangan, impor Excel | 🟡 | ekspor pengeluaran belum ada; rumus kas bebas belum dikonfirmasi |
+| Owner Admin: katalog, kategori, pengaturan, template, tambah usaha | 🟡 | akun kasir masih tiruan; upload logo belum ada |
+| Storage logo | ⬜ | bucket + policy belum dibuat |
+| Hosting & domain | ⬜ | belum dipilih / belum deploy |
+| Riwayat Excel 2025–2026 di produksi | ⬜ | alat impor siap, menunggu R1 |
+| Operasional produksi (backup, monitoring, SMTP) | ⬜ | Pertanyaan #14 |
 
-## 11. Aturan Kerja untuk Agent
+**Ringkasnya:** fondasi dan database sudah kuat dan live, dan semua layar sudah ada — tetapi
+aplikasi **belum tersambung** ke database. Itulah jarak utama menuju Saimara live.
 
-- **Tanya dulu** sebelum: membuat proyek Supabase / menjalankan migrasi ke database remote, memilih atau membayar layanan, `git init`/push ke remote, mengubah Keputusan Terkunci.
-- Jangan menambah fitur di luar dokumen ini (YAGNI). Ide tambahan → catat di bagian "Ditunda" dan usulkan ke user.
-- Logika uang & tanggal berupa fungsi murni yang dites (penjumlahan, kembalian, batas hari per zona waktu, nomor nota).
-- Setiap tabel baru wajib punya RLS + tes policy sebelum dipakai UI.
-- Jangan pernah menghapus data transaksi/pengeluaran secara permanen dari aplikasi.
-- Perbarui dokumen ini bila ada keputusan baru dari user (tambahkan ke tabel Keputusan Terkunci dengan tanggal).
+## 11. Kekurangan & rencana Rilis 1 ("Saimara live")
+
+Dikerjakan berurutan; setiap langkah ditutup dengan tes hijau dan demo singkat ke owner.
+
+| Langkah | Isi | Menutup |
+|---------|-----|---------|
+| **R1. Sambungkan ke Supabase** | Supabase Auth (owner: email; kasir: nama pengguna → `@kasir.kasiko.invalid`), sesi tersimpan untuk kasir offline, guard peran, pemilih usaha dari `business_members`; lapisan data Supabase + TanStack Query untuk owner; transport sync kasir → RPC; registrasi perangkat → `register_device`; cache katalog dari database. **Hapus `features/preview`** (#23). E2E jalan terhadap database. | "Data aplikasi dari database", "Login" |
+| **R2. Admin di database** | Katalog & kategori (tulis via RLS), pengaturan usaha, terapkan template, tambah usaha (`create_business`), akun kasir via `manage-cashier`, **upload logo** (bucket Storage + RLS + tes). | Admin 🟡 → ✅, Storage |
+| **R3. Hosting** | Pilih hosting (Pertanyaan #18), env publishable key, HTTPS, PWA ter-install di perangkat kasir. | Hosting |
+| **R4. Rekap via SQL** | Fungsi SQL untuk deret harian/bulanan, layanan terlaris, jam × hari, matriks rekap bulanan (`period_totals` sudah ada); ekspor pengeluaran; daftar pembatalan; impor riwayat Excel Saimara ke produksi lewat `import_history`. | Monitor & Manajemen, riwayat |
+| **R5. Cadangan & kas bebas** | Konfirmasi rumus (Pertanyaan #9), UI di database. | Manajemen |
+| **R6. Pengerasan** | Uji di perangkat kasir nyata + printer (Pertanyaan #2–#3), audit aksesibilitas, backup & pemantauan error (Pertanyaan #14), uji beban 1 tahun data. | Go-live |
+
+**Kekurangan lain yang perlu keputusan owner** (lihat Pertanyaan Terbuka): kontrol uang laci
+(modal awal & tutup kasir, #12) — tanpa ini selisih uang laci tidak terdeteksi; zona waktu
+Saimara (#7); bayar di awal/akhir (#4); daftar layanan & harga (#5).
+
+**Risiko yang diketahui:**
+
+- Belum ada proyek staging — `npm run db:test` berjalan di database produksi (aman karena
+  di-rollback, tetapi tetap produksi). Pertimbangkan proyek staging (Pertanyaan #14).
+- Rumus keuangan ada di dua tempat (TS & SQL) — wajib diuji dengan kasus yang sama.
+- Kunci JWT lama (`anon`, `service_role`) masih aktif di proyek dan tersimpan sebagai teks
+  biasa di komputer owner. Setelah R1 memakai kunci baru, pertimbangkan menonaktifkan kunci
+  lama (Pertanyaan #19).
+- `bootstrap-owner` tetap ter-deploy (dilindungi service key). Bisa dihapus setelah owner
+  terakhir dibuat.
 
 ---
 
-## 12. Pertanyaan Terbuka (tanyakan sebelum fitur terkait dikerjakan)
+## 12. Pertanyaan Terbuka
 
-1. ~~**Stack teknis**~~ — dikonfirmasi 2026-10-12 (keputusan #13).
-2. **Perangkat kasir** di Saimara: Android, iPhone/iPad, atau laptop? (iOS tidak bisa cetak Bluetooth langsung.)
-3. **Printer thermal**: sudah ada? Merek/tipe, 58mm atau 80mm? **Wajib mendukung BLE** — Web Bluetooth tidak bisa tersambung ke printer Bluetooth Classic (SPP).
-4. **Bayar di awal atau di akhir?** Asumsi saat ini: transaksi langsung lunas saat dibuat. Jika bayar di akhir, perlu fitur "mobil dalam pengerjaan / belum bayar".
-5. **Daftar layanan & harga Saimara** untuk `seed.sql`.
-6. **Logo & warna** Saimara.
-7. **Zona waktu** lokasi Saimara (WIB / WITA / WIT) — menentukan batas "hari ini".
-8. ~~**Proyek Supabase**~~ — dijawab 2026-10-20: sudah ada, dipakai langsung (keputusan #33).
-9. **Konfirmasi rumus kas bebas** & konsep saldo awal kas (bagian 4).
-10. ~~**Kategori pengeluaran**~~ — dijawab 2026-10-19: diatur owner per usaha, default dari template (keputusan #24–#26).
-11. **Dana cadangan per usaha** — asumsi: terpisah per usaha (bukan gabungan).
-12. **Modal awal laci & tutup kasir** — rumus "uang laci seharusnya" belum memasukkan uang kembalian awal; belum ada hitung fisik laci/setoran laci ke owner, sehingga selisih uang tidak terdeteksi. Perlu fitur ini?
-13. **Diskon / harga khusus** — keputusan #2 menetapkan harga tetap. Apakah memang tidak pernah ada potongan?
-14. **Lingkungan produksi** — staging terpisah, backup (paket Supabase), SMTP untuk reset password owner, pemantauan error (mis. Sentry).
-15. ~~**Label Excel yang belum jelas**~~ — dijawab 2026-10-20: tidak diimpor sampai owner membuat kategorinya (keputusan #29).
-16. ~~**Upah kasir & driver harian**~~ — dijawab 2026-10-20: dari uang laci (keputusan #30).
-17. ~~**Olsera**~~ — dijawab 2026-10-20: tidak dipakai, katalog dibangun dari awal (keputusan #31).
+Yang **masih terbuka** (tanyakan sebelum fitur terkait dikerjakan):
 
-## 13. Ditunda (bukan cakupan sekarang)
+| # | Pertanyaan | Dibutuhkan untuk |
+|---|------------|------------------|
+| 2 | Perangkat kasir Saimara: Android, iPhone/iPad, atau laptop? (iOS tidak bisa cetak Bluetooth langsung.) | R3, R6 |
+| 3 | Printer thermal: sudah ada? Merek/tipe, 58 atau 80 mm? **Wajib BLE** — Web Bluetooth tidak bisa ke Bluetooth Classic (SPP). | R6 |
+| 4 | Bayar di awal atau di akhir? Asumsi: lunas saat dicatat. Bila di akhir, perlu "mobil dalam pengerjaan / belum bayar". | R1 |
+| 5 | Daftar layanan & harga Saimara (owner membangun sendiri, #31) — kapan siap? | Go-live |
+| 6 | Logo & warna Saimara. | R2 |
+| 7 | Zona waktu Saimara (WIB/WITA/WIT) — menentukan batas "hari ini". Saat ini WIB. | R1 |
+| 9 | Konfirmasi rumus kas bebas & arti saldo awal kas (bagian 7). | R5 |
+| 11 | Dana cadangan terpisah per usaha? (asumsi: ya) | R5 |
+| 12 | Modal awal laci & tutup kasir (hitung fisik, setoran ke owner, selisih)? | Usulan R4/R5 |
+| 13 | Diskon / harga khusus — memang tidak pernah ada? | R1 |
+| 14 | Lingkungan produksi: staging terpisah, backup (paket Supabase), SMTP untuk reset kata sandi owner, pemantauan error. | R6 |
+| 18 | Hosting: Vercel, Netlify, atau Cloudflare Pages? Domain sendiri? | R3 |
+| 19 | Nonaktifkan kunci JWT lama setelah aplikasi memakai kunci baru? | setelah R1 |
 
-Payment gateway / QRIS dinamis · varian harga & stok · data pelanggan & member · akun per karyawan/PIN ·
-pengeluaran berulang otomatis · penyisihan cadangan otomatis · dashboard lintas usaha ·
-pendaftaran owner publik (SaaS) · nama/ikon PWA per brand · link nota publik · logo di nota thermal.
+Sudah terjawab: #1 stack (#13) · #8 proyek Supabase (#33) · #10 kategori pengeluaran
+(#24–#26) · #15 label Excel tak jelas (#29) · #16 upah harian (#30) · #17 Olsera (#31).
+
+## 13. Ditunda (bukan cakupan Rilis 1)
+
+Payment gateway / QRIS dinamis · varian harga & stok · data pelanggan & member · akun per
+karyawan/PIN · pengeluaran berulang otomatis · penyisihan cadangan otomatis · dashboard lintas
+usaha · pendaftaran owner publik (SaaS) · nama/ikon PWA per brand · link nota publik · logo di
+nota thermal.
+
+---
+
+## 14. Aturan kerja agent
+
+- **Tanya dulu** sebelum: membuat proyek/layanan berbayar, menjalankan migrasi ke database
+  produksi, push ke remote, mengubah Keputusan Terkunci, atau mengubah pengaturan Auth proyek.
+- **Rahasia:** baca kredensial hanya dari file lokal ter-ignore; jangan menampilkan, menyalin
+  ke repo, atau mengirimkannya ke layanan lain. Pindai repo sebelum commit.
+- **Database:** setiap perubahan skema = migrasi baru (jangan ubah migrasi yang sudah
+  diterapkan); setiap tabel baru wajib RLS + tes pgTAP sebelum dipakai UI; `npm run db:test`
+  hijau sebelum push. `seed.sql` dibuat ulang lewat `seed-sql.test.ts -u`, tidak pernah dikirim
+  ke produksi.
+- Logika uang & tanggal berupa fungsi murni yang dites. Rumus keuangan diubah di TS **dan** SQL
+  sekaligus, dengan kasus uji yang sama.
+- Jangan pernah menghapus data transaksi/pengeluaran secara permanen.
+- YAGNI: fitur di luar dokumen ini → catat di bagian 13 dan usulkan.
+- Perbarui dokumen ini bila ada keputusan baru (tambahkan ke bagian 5 dengan tanggal) dan
+  perbarui bagian 10 setiap langkah selesai.

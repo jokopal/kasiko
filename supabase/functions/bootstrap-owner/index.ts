@@ -8,14 +8,27 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
+/**
+ * True for any service-level key of this project: the runtime's own key, or another one
+ * the admin holds (legacy service_role JWT or a new `sb_secret_` key). Only such keys may
+ * list auth users, so anon/publishable keys and user tokens are refused.
+ */
+async function hasServiceAccess(key: string): Promise<boolean> {
+  if (key === '') return false
+  if (SERVICE_ROLE_KEY !== '' && safeEqual(key, SERVICE_ROLE_KEY)) return true
+  const probe = createClient(SUPABASE_URL, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const { error } = await probe.auth.admin.listUsers({ page: 1, perPage: 1 })
+  return !error
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS })
   if (req.method !== 'POST') return json({ error: 'Metode tidak didukung' }, 405)
 
-  const bearer = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
-  if (SERVICE_ROLE_KEY === '' || !safeEqual(bearer, SERVICE_ROLE_KEY)) {
-    return json({ error: 'Tidak diizinkan' }, 401)
-  }
+  const bearer = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+  if (!(await hasServiceAccess(bearer))) return json({ error: 'Tidak diizinkan' }, 401)
 
   const parsed = parseOwnerBootstrap(await req.json().catch(() => null))
   if (!parsed.ok) return json({ error: parsed.error }, 400)
