@@ -12,6 +12,7 @@ export type KpiId =
   | 'netCashFlow'
   | 'reserve'
   | 'freeCash'
+  | 'discounts'
 
 export type PanelId =
   | 'profitBreakdown'
@@ -52,6 +53,7 @@ export const KPI_INFO: Record<KpiId, { label: string; hint: string }> = {
   netCashFlow: { label: 'Arus kas bersih', hint: 'Pemasukan − semua pengeluaran' },
   reserve: { label: 'Saldo cadangan', hint: 'Per akhir periode' },
   freeCash: { label: 'Kas bebas', hint: 'Per akhir periode' },
+  discounts: { label: 'Diskon diberikan', hint: 'Potongan harga pada transaksi lunas' },
 }
 
 export const PANEL_INFO: Record<PanelId, { label: string; hint: string }> = {

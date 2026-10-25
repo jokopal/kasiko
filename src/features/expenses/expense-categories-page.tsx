@@ -5,7 +5,7 @@ import {
   PencilIcon,
   PlusIcon,
 } from 'lucide-react'
-import { useMemo, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { ChoiceCards } from '@/components/choice-cards'
 import { Badge } from '@/components/ui/badge'
@@ -30,12 +30,9 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { OwnerPage } from '@/features/owner/page'
-import {
-  moveExpenseCategory,
-  saveExpenseCategory,
-  setCategoryActive,
-} from '@/features/preview/actions'
-import { useBusinessData } from '@/features/preview/selectors'
+import { notify } from '@/features/data/notify'
+import { moveExpenseCategory, saveExpenseCategory, setActive } from '@/features/data/owner-actions'
+import { useOwnerData } from '@/features/data/owner-data'
 import {
   EXPENSE_KIND_HINT,
   EXPENSE_KIND_LABEL,
@@ -49,13 +46,8 @@ import { KindDot } from './kind'
 type Draft = { id?: string; name: string; kind: ExpenseKind; allowDrawer: boolean }
 
 export function ExpenseCategoriesPage() {
-  const { business, expenseCategories, expenses } = useBusinessData()
+  const { business, expenseCategories } = useOwnerData()
   const [draft, setDraft] = useState<Draft | null>(null)
-  const usage = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const e of expenses) counts.set(e.categoryId, (counts.get(e.categoryId) ?? 0) + 1)
-    return counts
-  }, [expenses])
 
   return (
     <OwnerPage
@@ -90,7 +82,14 @@ export function ExpenseCategoriesPage() {
                     <CategoryRow
                       key={row.id}
                       row={row}
-                      used={usage.get(row.id) ?? 0}
+                      onMove={(direction) =>
+                        notify(
+                          moveExpenseCategory(business.id, expenseCategories, row.id, direction),
+                        )
+                      }
+                      onToggle={(checked) =>
+                        notify(setActive(business.id, 'expense_categories', row.id, checked))
+                      }
                       isFirst={index === 0}
                       isLast={index === rows.length - 1}
                       onEdit={() =>
@@ -118,7 +117,12 @@ export function ExpenseCategoriesPage() {
       <Dialog open={draft !== null} onOpenChange={(open) => !open && setDraft(null)}>
         <DialogContent className="sm:max-w-md">
           {draft && (
-            <CategoryForm draft={draft} businessId={business.id} onDone={() => setDraft(null)} />
+            <CategoryForm
+              draft={draft}
+              businessId={business.id}
+              siblings={expenseCategories}
+              onDone={() => setDraft(null)}
+            />
           )}
         </DialogContent>
       </Dialog>
@@ -150,16 +154,18 @@ function ProfitFormula() {
 
 function CategoryRow({
   row,
-  used,
   isFirst,
   isLast,
   onEdit,
+  onMove,
+  onToggle,
 }: {
   row: ExpenseCategory
-  used: number
   isFirst: boolean
   isLast: boolean
   onEdit: () => void
+  onMove: (direction: -1 | 1) => void
+  onToggle: (checked: boolean) => void
 }) {
   return (
     <li className="grid gap-2 px-3 py-2.5 sm:px-4">
@@ -181,14 +187,14 @@ function CategoryRow({
       </div>
       <div className="flex items-center gap-1">
         <span className="mr-auto text-xs text-muted-foreground">
-          {used > 0 ? `${used} catatan` : 'Belum dipakai'}
+          {row.isActive ? 'Aktif' : 'Nonaktif'}
         </span>
         <Button
           variant="ghost"
           size="icon"
           className="size-9"
           disabled={isFirst}
-          onClick={() => moveExpenseCategory(row.id, -1)}
+          onClick={() => onMove(-1)}
           aria-label={`Naikkan ${row.name}`}
         >
           <ArrowUpIcon />
@@ -198,7 +204,7 @@ function CategoryRow({
           size="icon"
           className="size-9"
           disabled={isLast}
-          onClick={() => moveExpenseCategory(row.id, 1)}
+          onClick={() => onMove(1)}
           aria-label={`Turunkan ${row.name}`}
         >
           <ArrowDownIcon />
@@ -214,7 +220,7 @@ function CategoryRow({
         </Button>
         <Switch
           checked={row.isActive}
-          onCheckedChange={(checked) => setCategoryActive('expense', row.id, checked)}
+          onCheckedChange={onToggle}
           aria-label={`${row.name} aktif`}
         />
       </div>
@@ -225,10 +231,12 @@ function CategoryRow({
 function CategoryForm({
   draft,
   businessId,
+  siblings,
   onDone,
 }: {
   draft: Draft
   businessId: string
+  siblings: ExpenseCategory[]
   onDone: () => void
 }) {
   const [name, setName] = useState(draft.name)
@@ -236,9 +244,16 @@ function CategoryForm({
   const [allowDrawer, setAllowDrawer] = useState(draft.allowDrawer)
   const [error, setError] = useState<string | null>(null)
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault()
-    const result = saveExpenseCategory({ id: draft.id, businessId, name, kind, allowDrawer })
+    const result = await saveExpenseCategory({
+      id: draft.id,
+      businessId,
+      name,
+      kind,
+      allowDrawer,
+      siblings,
+    })
     if (!result.ok) {
       setError(result.error)
       return
@@ -248,7 +263,7 @@ function CategoryForm({
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-5">
+    <form onSubmit={(event) => void submit(event)} className="grid gap-5">
       <DialogHeader>
         <DialogTitle>{draft.id ? 'Ubah kategori' : 'Tambah kategori'}</DialogTitle>
       </DialogHeader>

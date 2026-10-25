@@ -5,8 +5,10 @@ import type {
   Business,
   CatalogCategory,
   CatalogItem,
+  Discount,
   Expense,
   ExpenseCategory,
+  Order,
   Transaction,
 } from '@/lib/types'
 
@@ -16,11 +18,15 @@ export interface KasirData {
   catalogCategories: CatalogCategory[]
   catalogItems: CatalogItem[]
   expenseCategories: ExpenseCategory[]
+  /** Active discount presets (decision #35). */
+  discounts: Discount[]
   device: DeviceRecord
   /** Today's transactions, newest first, including ones not yet synced. */
   transactions: LocalRow<Transaction>[]
   /** Today's drawer expenses, newest first, including ones not yet synced. */
   expenses: LocalRow<Expense>[]
+  /** Open orders (cars not yet paid), oldest first, including unsynced ones (decision #34). */
+  openOrders: LocalRow<Order>[]
   outbox: OutboxEntry[]
 }
 

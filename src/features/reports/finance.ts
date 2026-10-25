@@ -73,6 +73,8 @@ export interface PeriodTotals {
   /** Part of `income` that comes from imported history (no payment method). */
   historicalIncome: number
   historicalDays: number
+  /** Σ discounts given on paid sales (decision #35). */
+  discountTotal: number
 }
 
 interface KindTotals {
@@ -127,6 +129,7 @@ export function periodTotals(
     ownerExpense: sumRupiah(ex.filter((e) => e.source === 'owner').map((e) => e.amount)),
     historicalIncome,
     historicalDays: history.length,
+    discountTotal: sumRupiah(tx.map((t) => t.discountAmount)),
   }
 }
 

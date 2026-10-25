@@ -4,6 +4,7 @@ import {
   MinusIcon,
   SlidersHorizontalIcon,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Bar, BarChart, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 import { Button } from '@/components/ui/button'
@@ -25,8 +26,20 @@ import {
 } from '@/features/business/config'
 import { KindDot } from '@/features/expenses/kind'
 import { KIND_COLOR } from '@/features/expenses/kind-colors'
+import { PageLoading } from '@/components/page-loading'
+import {
+  fetchBusyHours,
+  fetchDailyTotals,
+  fetchExpenseByCategory,
+  fetchFreeCash,
+  fetchMonthlyTotals,
+  fetchPeriodTotals,
+  fetchReserveBalance,
+  fetchTopItems,
+} from '@/features/data/owner'
+import { useOwnerData } from '@/features/data/owner-data'
+import { keys } from '@/features/data/query-client'
 import { OwnerPage } from '@/features/owner/page'
-import { useBusinessData } from '@/features/preview/selectors'
 import { formatShortDate, previousRange, startOfBusinessDayKey } from '@/lib/datetime'
 import { formatRupiah, formatRupiahCompact } from '@/lib/money'
 import {
@@ -39,21 +52,12 @@ import {
 import { cn } from '@/lib/utils'
 import { DashboardCustomizer } from './dashboard-customizer'
 import {
-  busyHours,
-  dailySeries,
-  expenseByCategory,
-  freeCash,
   kindLookup,
   monthKeysEnding,
-  monthlySeries,
   percentChange,
-  periodTotals,
-  reserveBalance,
-  topItems,
   type MonthPoint,
   type PeriodTotals,
 } from './finance'
-import { dayKeysBetween } from './period'
 import { PeriodPicker } from './period-picker'
 import { usePeriod } from './use-period'
 
@@ -100,54 +104,47 @@ const PANEL_SPAN: Partial<Record<PanelId, string>> = {
 }
 
 export function DashboardPage() {
-  const data = useBusinessData()
-  const { business, config, transactions, expenses, reserveMovements, expenseCategories } = data
+  const { business, config, expenseCategories } = useOwnerData()
   const tz = business.timezone
   const period = usePeriod(tz)
   const { range } = period
   const [customizing, setCustomizing] = useState(false)
 
-  const stats = useMemo(() => {
-    const kindOf = kindLookup(expenseCategories)
-    const history = { days: data.historicalDays, timeZone: tz }
-    const options = { kindOf, history }
-    const current = periodTotals(transactions, expenses, range, options)
-    const previous = periodTotals(transactions, expenses, previousRange(range), options)
-    const days = dayKeysBetween(period.firstDayKey, period.lastDayKey)
-    return {
-      current,
-      previous,
-      kindOf,
-      reserve: reserveBalance(reserveMovements, range.to),
-      freeCash: freeCash({
-        openingCash: business.openingCash,
-        transactions,
-        expenses,
-        reserveMovements,
-        until: range.to,
-      }),
-      series: dailySeries(transactions, expenses, days, tz, data.historicalDays),
-      months: monthlySeries(
-        { transactions, expenses, history: data.historicalDays, timeZone: tz },
-        monthKeysEnding(period.lastDayKey, 12),
-        kindOf,
-      ),
-      top: topItems(transactions, range, 6),
-      expenseMix: expenseByCategory(expenses, range, history),
-      heat: busyHours(transactions, range, tz),
-    }
-  }, [
-    transactions,
-    expenses,
-    reserveMovements,
-    expenseCategories,
-    data.historicalDays,
-    business.openingCash,
-    range,
-    period,
-    tz,
-  ])
+  // Every number comes from the database (AGENTS.md section 7), fetched in parallel.
+  const query = useQuery({
+    queryKey: keys.report(business.id, 'dashboard', period.firstDayKey, period.lastDayKey),
+    queryFn: async () => {
+      const id = business.id
+      const before = previousRange(range)
+      const [current, previous, reserve, cash, series, months, top, expenseMix, heat] =
+        await Promise.all([
+          fetchPeriodTotals(id, range.from, range.to),
+          fetchPeriodTotals(id, before.from, before.to),
+          fetchReserveBalance(id, range.to),
+          fetchFreeCash(id, range.to),
+          fetchDailyTotals(id, period.firstDayKey, period.lastDayKey),
+          fetchMonthlyTotals(id, monthKeysEnding(period.lastDayKey, 12)),
+          fetchTopItems(id, range.from, range.to, 6),
+          fetchExpenseByCategory(id, range.from, range.to),
+          fetchBusyHours(id, range.from, range.to),
+        ])
+      return { current, previous, reserve, freeCash: cash, series, months, top, expenseMix, heat }
+    },
+  })
+  const kindOf = useMemo(() => kindLookup(expenseCategories), [expenseCategories])
 
+  if (!query.data) {
+    return (
+      <OwnerPage title="Dashboard" actions={<PeriodPicker period={period} />}>
+        {query.error ? (
+          <p className="text-sm text-destructive">Rekap gagal dimuat: {query.error.message}</p>
+        ) : (
+          <PageLoading />
+        )}
+      </OwnerPage>
+    )
+  }
+  const stats = { ...query.data, kindOf }
   const { current, previous } = stats
   const categoryName = (id: string) => expenseCategories.find((c) => c.id === id)?.name ?? 'Lainnya'
 
@@ -160,6 +157,11 @@ export function DashboardPage() {
     netCashFlow: { value: current.netCashFlow, previous: previous.netCashFlow },
     reserve: { value: stats.reserve },
     freeCash: { value: stats.freeCash },
+    discounts: {
+      value: current.discountTotal,
+      previous: previous.discountTotal,
+      higherIsWorse: true,
+    },
   }
 
   const panels: Record<PanelId, () => ReactNode> = {
@@ -269,6 +271,7 @@ export function DashboardPage() {
         open={customizing}
         onOpenChange={setCustomizing}
         businessId={business.id}
+        templateId={config.templateId}
         layout={config.dashboard}
       />
     </OwnerPage>

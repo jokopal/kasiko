@@ -41,7 +41,7 @@ insert into public.business_members (business_id, user_id, role) values
 
 insert into public.business_configs (business_id, template_id, dashboard) values (
   '5a1a0000-0000-4000-8000-0000000000b1', 'cuci-mobil',
-  '{"kpis":[{"id":"income","visible":true},{"id":"expense","visible":true},{"id":"operatingProfit","visible":true},{"id":"profit","visible":true},{"id":"drawings","visible":true},{"id":"freeCash","visible":true},{"id":"netCashFlow","visible":false},{"id":"reserve","visible":false}],"panels":[{"id":"profitBreakdown","visible":true},{"id":"trend","visible":true},{"id":"monthly","visible":true},{"id":"paymentMethods","visible":true},{"id":"topItems","visible":true},{"id":"expenseMix","visible":true},{"id":"busyHours","visible":true}]}'::jsonb
+  '{"kpis":[{"id":"income","visible":true},{"id":"expense","visible":true},{"id":"operatingProfit","visible":true},{"id":"profit","visible":true},{"id":"drawings","visible":true},{"id":"freeCash","visible":true},{"id":"netCashFlow","visible":false},{"id":"reserve","visible":false},{"id":"discounts","visible":false}],"panels":[{"id":"profitBreakdown","visible":true},{"id":"trend","visible":true},{"id":"monthly","visible":true},{"id":"paymentMethods","visible":true},{"id":"topItems","visible":true},{"id":"expenseMix","visible":true},{"id":"busyHours","visible":true}]}'::jsonb
 );
 
 select public.apply_template_rows(

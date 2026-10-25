@@ -16,6 +16,8 @@ export type CartAction =
   | { type: 'decrement'; itemId: string }
   | { type: 'remove'; itemId: string }
   | { type: 'clear' }
+  /** Replace the cart with the lines of an open order (decision #34). */
+  | { type: 'load'; lines: CartLine[] }
 
 function changeQty(lines: CartLine[], itemId: string, delta: number): CartLine[] {
   return lines.flatMap((line) => {
@@ -41,6 +43,8 @@ export function cartReducer(lines: CartLine[], action: CartAction): CartLine[] {
       return lines.filter((line) => line.itemId !== action.itemId)
     case 'clear':
       return []
+    case 'load':
+      return action.lines.filter((line) => line.qty > 0).map((line) => ({ ...line }))
   }
 }
 

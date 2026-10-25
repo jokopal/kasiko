@@ -3,8 +3,10 @@ import type {
   Business,
   CatalogCategory,
   CatalogItem,
+  Discount,
   Expense,
   ExpenseCategory,
+  Order,
   Transaction,
 } from '@/lib/types'
 
@@ -14,8 +16,11 @@ import type {
 export type OutboxOperation =
   | { kind: 'transaction.create'; record: Transaction }
   | { kind: 'transaction.void'; targetId: string; reason: string; voidedAt: string }
-  | { kind: 'expense.create'; record: Expense }
+  /** deviceId: drawer expenses are taken at a registered device (server-checked). */
+  | { kind: 'expense.create'; record: Expense; deviceId?: string }
   | { kind: 'expense.void'; targetId: string; reason: string; voidedAt: string }
+  | { kind: 'order.save'; record: Order }
+  | { kind: 'order.cancel'; targetId: string; reason: string; cancelledAt: string }
 
 export interface OutboxEntry {
   /** Operation id; for creates it equals the record id (the idempotency key). */
@@ -39,6 +44,7 @@ export interface CatalogSnapshot {
   catalogCategories: CatalogCategory[]
   catalogItems: CatalogItem[]
   expenseCategories: ExpenseCategory[]
+  discounts: Discount[]
   fetchedAt: string
 }
 

@@ -1,4 +1,5 @@
 import { createContext, use } from 'react'
+import type { Order } from '@/lib/types'
 import type { CartAction, CartLine } from './cart'
 
 export interface CartContextValue {
@@ -8,6 +9,9 @@ export interface CartContextValue {
   plateNumber: string
   setPlateNumber: (value: string) => void
   dispatch: (action: CartAction) => void
+  /** The open order currently in the cart, if the cashier opened one. */
+  order: Order | null
+  loadOrder: (order: Order) => void
   reset: () => void
 }
 

@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { isDrawerCategory, recordDrawerExpense } from '@/features/pos/commands'
-import { createOwnerExpense } from '@/features/preview/actions'
+import { createOwnerExpense } from '@/features/data/owner-actions'
 import { formatRupiah } from '@/lib/money'
 import { fail } from '@/lib/result'
 import {
@@ -47,6 +47,8 @@ interface ExpenseDialogProps {
   businessId: string
   categories: ExpenseCategory[]
   source: ExpenseSource
+  /** Required for drawer expenses: the registered cashier device. */
+  deviceId?: string
 }
 
 /** Records an expense: `drawer` from the cashier screen, `owner` from the owner area. */
@@ -75,6 +77,7 @@ function ExpenseForm({
   businessId,
   categories,
   source,
+  deviceId,
   onDone,
 }: ExpenseDialogProps & { onDone: () => void }) {
   // The cashier only sees what the owner allows for the drawer (decision #26).
@@ -94,10 +97,10 @@ function ExpenseForm({
     // Cashier: outbox, works offline. Owner: straight to the server (online-only).
     const result =
       source === 'drawer'
-        ? await recordDrawerExpense({ ...input, categories }).catch(() =>
+        ? await recordDrawerExpense({ ...input, categories, deviceId: deviceId ?? '' }).catch(() =>
             fail('Gagal menyimpan di perangkat. Coba lagi.'),
           )
-        : createOwnerExpense(input)
+        : await createOwnerExpense(input)
     setSaving(false)
     if (!result.ok) {
       setError(result.error)

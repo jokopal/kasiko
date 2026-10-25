@@ -1,4 +1,5 @@
 import {
+  CarFrontIcon,
   DownloadIcon,
   HistoryIcon,
   LogOutIcon,
@@ -11,7 +12,6 @@ import { Suspense, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { BusinessLogo } from '@/components/business-logo'
 import { PageLoading } from '@/components/page-loading'
-import { PreviewBanner } from '@/components/preview-banner'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -34,6 +34,7 @@ import { useKasirData } from './use-kasir-data'
 
 const NAV = [
   { to: '/kasir', label: 'Kasir', icon: ShoppingCartIcon, end: true },
+  { to: '/kasir/pesanan', label: 'Pesanan', icon: CarFrontIcon, end: false },
   { to: '/kasir/riwayat', label: 'Riwayat', icon: HistoryIcon, end: false },
   { to: '/kasir/ringkasan', label: 'Ringkasan', icon: WalletIcon, end: false },
 ] as const
@@ -49,7 +50,7 @@ export function KasirLayout() {
 }
 
 function KasirShell() {
-  const { business, device, outbox } = useKasirData()
+  const { business, device, outbox, openOrders } = useKasirData()
   const navigate = useNavigate()
   const [printerOpen, setPrinterOpen] = useState(false)
   const canInstall = useCanInstall()
@@ -63,14 +64,12 @@ function KasirShell() {
       )
       return
     }
-    signOut()
-    void navigate('/masuk', { replace: true })
+    void signOut().then(() => navigate('/masuk', { replace: true }))
   }
 
   return (
     <CartProvider key={business.id}>
       <div className="flex h-dvh flex-col bg-muted/40">
-        <PreviewBanner />
         <header className="bg-primary text-primary-foreground shadow-sm">
           <div className="flex h-14 items-center gap-2 px-3 md:h-16 md:gap-3 md:px-5">
             <BusinessLogo business={business} className="ring-2 ring-white/25 md:size-10" />
@@ -93,7 +92,14 @@ function KasirShell() {
                     )
                   }
                 >
-                  <Icon className="size-5" aria-hidden />
+                  <span className="relative">
+                    <Icon className="size-5" aria-hidden />
+                    {to === '/kasir/pesanan' && openOrders.length > 0 && (
+                      <span className="absolute -top-2 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-primary tabular-nums">
+                        {openOrders.length}
+                      </span>
+                    )}
+                  </span>
                   <span className="hidden lg:inline">{label}</span>
                 </NavLink>
               ))}

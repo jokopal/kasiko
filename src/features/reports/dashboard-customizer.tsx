@@ -17,7 +17,8 @@ import {
   type DashboardLayout,
   type LayoutEntry,
 } from '@/features/business/config'
-import { resetDashboardLayout, saveDashboardLayout } from '@/features/preview/actions'
+import { toast } from 'sonner'
+import { resetDashboardLayout, saveDashboardLayout } from '@/features/data/owner-actions'
 import { cn } from '@/lib/utils'
 
 /** Per-business dashboard layout: what to show and in which order. Saved on every change. */
@@ -25,15 +26,19 @@ export function DashboardCustomizer({
   open,
   onOpenChange,
   businessId,
+  templateId,
   layout,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   businessId: string
+  templateId: string
   layout: DashboardLayout
 }) {
   const save = (next: Partial<DashboardLayout>) =>
-    saveDashboardLayout(businessId, { ...layout, ...next })
+    void saveDashboardLayout(businessId, { ...layout, ...next }).then((result) => {
+      if (!result.ok) toast.error(result.error)
+    })
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -59,7 +64,10 @@ export function DashboardCustomizer({
           />
         </div>
         <SheetFooter className="border-t">
-          <Button variant="outline" onClick={() => resetDashboardLayout(businessId)}>
+          <Button
+            variant="outline"
+            onClick={() => void resetDashboardLayout(businessId, templateId)}
+          >
             <RotateCcwIcon />
             Kembalikan ke template
           </Button>

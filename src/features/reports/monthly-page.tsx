@@ -1,4 +1,5 @@
 import { ChevronLeftIcon, ChevronRightIcon, DownloadIcon } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { Fragment, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -18,13 +19,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { KindDot } from '@/features/expenses/kind'
+import { PageLoading } from '@/components/page-loading'
+import { fetchFirstActivityDay, fetchMonthlyMatrix } from '@/features/data/owner'
+import { useOwnerData } from '@/features/data/owner-data'
+import { keys } from '@/features/data/query-client'
 import { OwnerPage } from '@/features/owner/page'
-import { useBusinessData } from '@/features/preview/selectors'
 import { businessDayKey, getZonedParts, startOfBusinessDayKey } from '@/lib/datetime'
 import { formatDigits, formatRupiah, sumRupiah } from '@/lib/money'
 import { EXPENSE_KIND_LABEL, EXPENSE_KINDS } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { monthKeysEnding, monthlyMatrix, type MonthlyMatrix } from './finance'
+import { monthKeysEnding, type MonthlyMatrix } from './finance'
 import { downloadCsv, downloadWorkbook, monthSheetRows, sheetNameFor } from './monthly-export'
 
 const MONTH_LONG = [
@@ -49,26 +53,26 @@ const monthTitle = (key: string) =>
 const cell = (value: number) => (value === 0 ? '' : formatDigits(value))
 
 export function MonthlyPage() {
-  const { business, transactions, expenses, historicalDays, expenseCategories } = useBusinessData()
+  const { business, expenseCategories } = useOwnerData()
   const tz = business.timezone
   const [params, setParams] = useSearchParams()
+
+  const firstDay = useQuery({
+    queryKey: keys.report(business.id, 'first-day'),
+    queryFn: () => fetchFirstActivityDay(business.id),
+  })
 
   // Every month from the oldest record (live or imported) up to this month.
   const months = useMemo(() => {
     const today = businessDayKey(new Date(), tz)
-    const keys = [
-      ...transactions.map((t) => businessDayKey(new Date(t.occurredAt), tz)),
-      ...expenses.map((e) => businessDayKey(new Date(e.occurredAt), tz)),
-      ...historicalDays.map((d) => d.dayKey),
-    ]
-    const oldest = keys.reduce((min, key) => (key < min ? key : min), today)
+    const oldest = firstDay.data && firstDay.data < today ? firstDay.data : today
     const span =
       (Number(today.slice(0, 4)) - Number(oldest.slice(0, 4))) * 12 +
       Number(today.slice(5, 7)) -
       Number(oldest.slice(5, 7)) +
       1
     return monthKeysEnding(today, Math.min(Math.max(span, 1), 120)).reverse()
-  }, [transactions, expenses, historicalDays, tz])
+  }, [firstDay.data, tz])
 
   const requested = params.get('bulan')
   const monthKey =
@@ -83,32 +87,32 @@ export function MonthlyPage() {
     setParams(next, { replace: true })
   }
 
-  const input = useMemo(
-    () => ({ transactions, expenses, history: historicalDays, timeZone: tz }),
-    [transactions, expenses, historicalDays, tz],
-  )
-  const matrix = useMemo(
-    () => monthlyMatrix(input, monthKey, expenseCategories),
-    [input, monthKey, expenseCategories],
-  )
+  const matrixQuery = useQuery({
+    queryKey: keys.report(business.id, 'matrix', monthKey),
+    queryFn: () => fetchMonthlyMatrix(business.id, monthKey, expenseCategories, tz),
+  })
+  const matrix = matrixQuery.data
   const categoryName = (id: string) =>
     expenseCategories.find((c) => c.id === id)?.name ?? 'Kategori terhapus'
 
-  async function exportMonths(keys: string[], format: 'xlsx' | 'csv') {
+  async function exportMonths(monthKeys: string[], format: 'xlsx' | 'csv') {
+    const toastId = toast.loading('Menyiapkan file…')
     try {
-      const sheets = keys.map((key) => ({
-        name: sheetNameFor(key),
-        rows: monthSheetRows(monthlyMatrix(input, key, expenseCategories), key, categoryName),
-      }))
+      const sheets = []
+      for (const key of monthKeys) {
+        const data = await fetchMonthlyMatrix(business.id, key, expenseCategories, tz)
+        sheets.push({ name: sheetNameFor(key), rows: monthSheetRows(data, key, categoryName) })
+      }
       const base = `${business.name} - Arus Kas`
       if (format === 'csv') {
         await downloadCsv(`${base} ${monthKey}.csv`, sheets[0]?.rows ?? [])
       } else {
-        const suffix = keys.length === 1 ? monthKey : `${keys.at(-1)} sd ${keys[0]}`
+        const suffix = monthKeys.length === 1 ? monthKey : `${monthKeys.at(-1)} sd ${monthKeys[0]}`
         await downloadWorkbook(`${base} ${suffix}.xlsx`, [...sheets].reverse())
       }
+      toast.success('File siap diunduh', { id: toastId })
     } catch {
-      toast.error('Ekspor gagal. Coba lagi.')
+      toast.error('Ekspor gagal. Coba lagi.', { id: toastId })
     }
   }
 
@@ -174,8 +178,21 @@ export function MonthlyPage() {
         </>
       }
     >
-      <MonthSummary matrix={matrix} />
-      <MatrixTable matrix={matrix} categoryName={categoryName} kinds={expenseCategories} tz={tz} />
+      {matrix ? (
+        <>
+          <MonthSummary matrix={matrix} />
+          <MatrixTable
+            matrix={matrix}
+            categoryName={categoryName}
+            kinds={expenseCategories}
+            tz={tz}
+          />
+        </>
+      ) : matrixQuery.error ? (
+        <p className="text-sm text-destructive">Rekap gagal dimuat: {matrixQuery.error.message}</p>
+      ) : (
+        <PageLoading />
+      )}
     </OwnerPage>
   )
 }

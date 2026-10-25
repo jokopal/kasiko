@@ -77,6 +77,22 @@ Aturan inti: uang selalu **integer rupiah**, batas hari mengikuti **zona waktu u
 pernah dihapus (hanya dibatalkan dengan alasan). Logika ini berupa fungsi murni di `lib/` dan
 `features/*/` yang dites, dan akan dipakai ulang oleh RPC server.
 
+## Variabel lingkungan
+
+| File              | Isi                                                                      | Git       |
+| ----------------- | ------------------------------------------------------------------------ | --------- |
+| `.env.production` | URL proyek + kunci **publishable** (publik by design) untuk build Vercel | di-commit |
+| `.env.local`      | sama, untuk `npm run dev` / E2E lokal                                    | di-ignore |
+| `.env.bootstrap`  | kunci service, URL pooler database, kata sandi bootstrap                 | di-ignore |
+
+Kunci service/secret **tidak pernah** masuk ke `VITE_*` atau ke repo.
+
+## E2E
+
+`npm run test:e2e` menjalankan tes asap (login, guard rute, 404, bundel owner tidak terunduh)
+di `phone`, `tablet`, `desktop` terhadap proyek sungguhan **tanpa menulis data**. Alur yang
+mencatat data (jual, pesanan, offline) butuh usaha uji terpisah — lihat Pertanyaan Terbuka #20.
+
 ## Database (Supabase)
 
 Database berjalan di **proyek Supabase owner** — tidak perlu Docker (keputusan #33). Rahasia

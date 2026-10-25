@@ -1,4 +1,5 @@
-import { PlusIcon } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { DownloadIcon, PlusIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { VoidDialog } from '@/components/void-dialog'
@@ -20,14 +21,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PageLoading } from '@/components/page-loading'
+import { fetchExpenses } from '@/features/data/owner'
+import { voidExpenseAsOwner } from '@/features/data/owner-actions'
+import { useOwnerData } from '@/features/data/owner-data'
+import { keys } from '@/features/data/query-client'
 import { OwnerPage } from '@/features/owner/page'
-import { voidExpenseAsOwner } from '@/features/preview/actions'
-import { useBusinessData } from '@/features/preview/selectors'
 import { PeriodPicker } from '@/features/reports/period-picker'
 import { usePeriod } from '@/features/reports/use-period'
-import { formatDateTime, isInRange } from '@/lib/datetime'
+import { formatDateTime } from '@/lib/datetime'
 import { formatRupiah, sumRupiah } from '@/lib/money'
 import { kindLookup } from '@/features/reports/finance'
+import { downloadCsv, downloadWorkbook } from '@/features/reports/monthly-export'
+import { expenseSheetRows } from '@/features/reports/table-export'
 import {
   EXPENSE_KIND_LABEL,
   EXPENSE_KINDS,
@@ -40,9 +46,14 @@ import { ExpenseDialog } from './expense-dialog'
 import { KindDot } from './kind'
 
 export function ExpensesPage() {
-  const { business, expenses, expenseCategories } = useBusinessData()
+  const { business, expenseCategories } = useOwnerData()
   const tz = business.timezone
   const period = usePeriod(tz)
+  const query = useQuery({
+    queryKey: keys.list(business.id, 'expenses', period.firstDayKey, period.lastDayKey),
+    queryFn: () => fetchExpenses(business.id, period.range.from, period.range.to),
+  })
+  const expenses = query.data ?? []
   const [source, setSource] = useState('all')
   const [status, setStatus] = useState('active')
   const [categoryId, setCategoryId] = useState('all')
@@ -53,7 +64,6 @@ export function ExpensesPage() {
   const categoryName = (id: string) => expenseCategories.find((c) => c.id === id)?.name ?? '—'
   const kindOf = kindLookup(expenseCategories)
   const rows = expenses
-    .filter((e) => isInRange(new Date(e.occurredAt), period.range))
     .filter((e) => source === 'all' || e.source === source)
     .filter((e) => status === 'all' || e.status === status)
     .filter((e) => categoryId === 'all' || e.categoryId === categoryId)
@@ -69,10 +79,36 @@ export function ExpensesPage() {
       title="Pengeluaran"
       description={`${rows.length} catatan · total aktif ${formatRupiah(activeTotal)}`}
       actions={
-        <Button onClick={() => setAddOpen(true)}>
-          <PlusIcon />
-          Pengeluaran owner
-        </Button>
+        <>
+          <Button
+            variant="outline"
+            disabled={rows.length === 0}
+            onClick={() =>
+              void downloadWorkbook(`${business.name} - Pengeluaran ${period.firstDayKey}.xlsx`, [
+                { name: 'Pengeluaran', rows: expenseSheetRows(rows, expenseCategories, tz) },
+              ])
+            }
+          >
+            <DownloadIcon />
+            Excel
+          </Button>
+          <Button
+            variant="outline"
+            disabled={rows.length === 0}
+            onClick={() =>
+              void downloadCsv(
+                `${business.name} - Pengeluaran ${period.firstDayKey}.csv`,
+                expenseSheetRows(rows, expenseCategories, tz),
+              )
+            }
+          >
+            CSV
+          </Button>
+          <Button onClick={() => setAddOpen(true)}>
+            <PlusIcon />
+            Pengeluaran owner
+          </Button>
+        </>
       }
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -130,6 +166,11 @@ export function ExpensesPage() {
           </Card>
         ))}
       </div>
+
+      {query.isPending && <PageLoading />}
+      {query.error && (
+        <p className="text-sm text-destructive">Pengeluaran gagal dimuat: {query.error.message}</p>
+      )}
 
       <Card className="py-0">
         <Table>
@@ -218,9 +259,9 @@ export function ExpensesPage() {
         description={
           target ? `${categoryName(target.categoryId)} · ${formatRupiah(target.amount)}` : ''
         }
-        onConfirm={(reason) => {
+        onConfirm={async (reason) => {
           if (!target) return { ok: false, error: 'Tidak ada data dipilih' }
-          const result = voidExpenseAsOwner(target.id, reason)
+          const result = await voidExpenseAsOwner(business.id, target.id, reason)
           if (result.ok) toast.success('Pengeluaran dibatalkan')
           return result
         }}

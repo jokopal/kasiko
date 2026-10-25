@@ -3,7 +3,6 @@ import { Suspense, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { BusinessLogo } from '@/components/business-logo'
 import { PageLoading } from '@/components/page-loading'
-import { PreviewBanner } from '@/components/preview-banner'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,12 +29,13 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { selectBusiness, signOut } from '@/features/auth/session'
+import { Button } from '@/components/ui/button'
+import { selectBusiness, signOut, useSession } from '@/features/auth/session'
 import { AddBusinessDialog } from '@/features/business/add-business-dialog'
 import { useBrandTheme } from '@/features/business/use-brand-theme'
 import { useOnlineStatus } from '@/features/offline/use-online-status'
-import { useBusinessData } from '@/features/preview/selectors'
-import { usePreviewState } from '@/features/preview/store'
+import { useOwnerBusinesses, useOwnerData } from '@/features/data/owner-data'
+import { OwnerDataProvider } from '@/features/data/owner-data-provider'
 import type { Business } from '@/lib/types'
 import { OWNER_NAV } from './nav'
 
@@ -43,7 +43,32 @@ import { OWNER_NAV } from './nav'
 const startExpanded = () => window.matchMedia('(min-width: 1024px)').matches
 
 export function OwnerLayout() {
-  const { business } = useBusinessData()
+  const session = useSession()
+  const [adding, setAdding] = useState(false)
+  if (!session) return null // RequireRole redirects before this renders
+  if (!session.businessId) {
+    // A fresh owner account: nothing to show until the first business exists.
+    return (
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-6 text-center">
+        <h1 className="text-xl font-semibold">Belum ada usaha</h1>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          Buat usaha pertama dari template — katalog, kategori pengeluaran, dan dashboard langsung
+          terisi dan bisa diubah kapan saja.
+        </p>
+        <Button onClick={() => setAdding(true)}>Buat usaha</Button>
+        <AddBusinessDialog open={adding} onOpenChange={setAdding} />
+      </main>
+    )
+  }
+  return (
+    <OwnerDataProvider key={session.businessId} businessId={session.businessId}>
+      <OwnerShell />
+    </OwnerDataProvider>
+  )
+}
+
+function OwnerShell() {
+  const { business } = useOwnerData()
   const online = useOnlineStatus()
   const location = useLocation()
   // Lives outside the sidebar: on phones the sidebar is a sheet that unmounts on close.
@@ -59,7 +84,6 @@ export function OwnerLayout() {
       <OwnerSidebar current={business} onAddBusiness={() => setAdding(true)} />
       <AddBusinessDialog open={adding} onOpenChange={setAdding} />
       <SidebarInset className="min-w-0">
-        <PreviewBanner />
         <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur md:px-4">
           <SidebarTrigger className="size-9" />
           <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-5" />
@@ -95,7 +119,8 @@ function OwnerSidebar({
   current: Business
   onAddBusiness: () => void
 }) {
-  const { businesses } = usePreviewState()
+  const { data } = useOwnerBusinesses()
+  const businesses = data ?? [current]
   const { isMobile, setOpenMobile } = useSidebar()
   const location = useLocation()
   const navigate = useNavigate()
@@ -103,8 +128,7 @@ function OwnerSidebar({
   const closeOnMobile = () => isMobile && setOpenMobile(false)
 
   function logout() {
-    signOut()
-    void navigate('/masuk', { replace: true })
+    void signOut().then(() => navigate('/masuk', { replace: true }))
   }
 
   return (

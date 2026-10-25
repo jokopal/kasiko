@@ -41,6 +41,10 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <PosPage /> },
           {
+            path: 'pesanan',
+            element: page(() => import('@/features/pos/orders-page'), 'OrdersPage'),
+          },
+          {
             path: 'riwayat',
             element: page(() => import('@/features/pos/history-page'), 'HistoryPage'),
           },
@@ -84,6 +88,10 @@ export const routes: RouteObject[] = [
           {
             path: 'katalog',
             element: page(() => import('@/features/catalog/catalog-page'), 'CatalogPage'),
+          },
+          {
+            path: 'diskon',
+            element: page(() => import('@/features/catalog/discounts-page'), 'DiscountsPage'),
           },
           {
             path: 'kategori-pengeluaran',

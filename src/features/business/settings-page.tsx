@@ -1,5 +1,5 @@
-import { CheckIcon, ImageUpIcon, RotateCcwIcon, TriangleAlertIcon } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { CheckIcon, ImageUpIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react'
+import { useRef, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { BusinessLogo } from '@/components/business-logo'
 import { RupiahInput } from '@/components/rupiah-input'
@@ -16,9 +16,8 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { OwnerPage } from '@/features/owner/page'
-import { saveBusiness } from '@/features/preview/actions'
-import { useBusinessData } from '@/features/preview/selectors'
-import { resetPreviewState } from '@/features/preview/store'
+import { removeLogo, saveBusiness, uploadLogo } from '@/features/data/owner-actions'
+import { useOwnerData } from '@/features/data/owner-data'
 import { formatReceipt } from '@/features/receipt/format-receipt'
 import { ReceiptPaper } from '@/features/receipt/receipt-paper'
 import { isValidReceiptPrefix } from '@/features/receipt/receipt-number'
@@ -28,7 +27,7 @@ import { brandContrastChecks, isHexColor, readableForeground } from './brand'
 import { TemplateCard } from './template-card'
 
 export function SettingsPage() {
-  const { business, config } = useBusinessData()
+  const { business, config } = useOwnerData()
   // Re-mount the form when the owner switches business so fields never mix.
   return <SettingsForm key={business.id} business={business} templateId={config.templateId} />
 }
@@ -40,9 +39,16 @@ function SettingsForm({ business, templateId }: { business: Business; templateId
     setDraft((current) => ({ ...current, [key]: value }))
   const previewColor = isHexColor(draft.primaryColor) ? draft.primaryColor : business.primaryColor
 
-  function submit(event: FormEvent) {
+  const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  async function submit(event: FormEvent) {
     event.preventDefault()
-    const result = saveBusiness(draft)
+    if (saving) return
+    setSaving(true)
+    const result = await saveBusiness(draft)
+    setSaving(false)
     if (!result.ok) {
       setError(result.error)
       return
@@ -51,16 +57,20 @@ function SettingsForm({ business, templateId }: { business: Business; templateId
     toast.success('Pengaturan usaha disimpan')
   }
 
-  function resetPreview() {
-    if (!window.confirm('Kembalikan semua data pratinjau ke kondisi awal?')) return
-    resetPreviewState()
-    toast.success('Data pratinjau dikembalikan')
+  async function onLogo(file: File | undefined) {
+    if (!file) return
+    setUploading(true)
+    const result = await uploadLogo(business, file)
+    setUploading(false)
+    if (fileInput.current) fileInput.current.value = ''
+    if (result.ok) toast.success('Logo diperbarui')
+    else toast.error(result.error)
   }
 
   return (
     <OwnerPage title="Pengaturan Usaha" description="Identitas usaha di layar kasir dan nota.">
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <form onSubmit={submit}>
+        <form onSubmit={(event) => void submit(event)}>
           <Card>
             <CardHeader>
               <CardTitle>Identitas & brand</CardTitle>
@@ -69,21 +79,47 @@ function SettingsForm({ business, templateId }: { business: Business; templateId
               <FieldGroup>
                 <div className="flex items-center gap-4">
                   <BusinessLogo
-                    business={{ ...draft, primaryColor: previewColor }}
+                    business={{ ...draft, logoUrl: business.logoUrl, primaryColor: previewColor }}
                     className="size-16 text-xl"
                   />
                   <div className="space-y-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        toast.info('Upload logo aktif setelah Supabase Storage tersambung')
-                      }
-                    >
-                      <ImageUpIcon />
-                      Upload logo
-                    </Button>
-                    <p className="text-xs text-muted-foreground">PNG/JPG persegi, maks. 1 MB</p>
+                    <input
+                      ref={fileInput}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="sr-only"
+                      id="logo-file"
+                      onChange={(event) => void onLogo(event.target.files?.[0])}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={uploading}
+                        onClick={() => fileInput.current?.click()}
+                      >
+                        <ImageUpIcon />
+                        {uploading ? 'Mengunggah…' : 'Upload logo'}
+                      </Button>
+                      {business.logoUrl && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="text-destructive"
+                          onClick={() =>
+                            void removeLogo(business).then((result) => {
+                              if (!result.ok) toast.error(result.error)
+                            })
+                          }
+                        >
+                          <Trash2Icon />
+                          Hapus
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      PNG/JPG/WebP persegi, maks. 1 MB
+                    </p>
                   </div>
                 </div>
                 <Field>
@@ -184,7 +220,9 @@ function SettingsForm({ business, templateId }: { business: Business; templateId
                   <Button type="button" variant="outline" onClick={() => setDraft(business)}>
                     Batalkan perubahan
                   </Button>
-                  <Button type="submit">Simpan</Button>
+                  <Button type="submit" disabled={saving}>
+                    Simpan
+                  </Button>
                 </div>
               </FieldGroup>
             </CardContent>
@@ -216,19 +254,6 @@ function SettingsForm({ business, templateId }: { business: Business; templateId
           </Card>
 
           <TemplateCard businessId={business.id} templateId={templateId} />
-
-          <Card className="gap-3">
-            <CardHeader>
-              <CardTitle className="text-base">Data pratinjau</CardTitle>
-              <CardDescription>Kembalikan transaksi contoh ke kondisi awal.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="outline" onClick={resetPreview}>
-                <RotateCcwIcon />
-                Reset data pratinjau
-              </Button>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </OwnerPage>
@@ -245,6 +270,12 @@ function ReceiptPreview({ business }: { business: Business }) {
     occurredAt: new Date().toISOString(),
     plateNumber: 'B 1234 XYZ',
     paymentMethod: 'cash',
+    subtotal: 45_000,
+    discountId: null,
+    discountName: null,
+    discountType: null,
+    discountValue: null,
+    discountAmount: 0,
     total: 45_000,
     cashReceived: 50_000,
     changeAmount: 5_000,
@@ -253,6 +284,7 @@ function ReceiptPreview({ business }: { business: Business }) {
     voidedAt: null,
     deviceId: 'preview',
     receivedAt: null,
+    orderId: null,
     items: [
       {
         id: '1',

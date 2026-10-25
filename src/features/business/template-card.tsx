@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { applyTemplate } from '@/features/preview/actions'
+import { applyTemplate } from '@/features/data/owner-actions'
 import { BUSINESS_TEMPLATES, findTemplate } from './templates'
 
 /** Re-applies a template: adds only what the business is missing, never edits rows. */
@@ -24,8 +24,8 @@ export function TemplateCard({
   const [choice, setChoice] = useState(templateId)
   const current = findTemplate(templateId)
 
-  function apply() {
-    const result = applyTemplate(businessId, choice)
+  async function apply() {
+    const result = await applyTemplate(businessId, choice)
     if (!result.ok) {
       toast.error(result.error)
       return
@@ -64,7 +64,7 @@ export function TemplateCard({
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={apply}>
+        <Button variant="outline" onClick={() => void apply()}>
           Terapkan
         </Button>
       </CardContent>

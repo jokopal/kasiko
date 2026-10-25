@@ -21,6 +21,7 @@ import {
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { recordSale } from './commands'
+import { applicableDiscounts, discountAmount, describeDiscount } from './discount'
 import { useCart } from './use-cart'
 import { useKasirData } from './use-kasir-data'
 import { computeChange, quickCashOptions } from './payment'
@@ -63,9 +64,15 @@ export function PaymentDialog({ open, onOpenChange }: PaymentDialogProps) {
 }
 
 function PaymentForm({ onSaved }: { onSaved: (transaction: Transaction) => void }) {
-  const { business, device } = useKasirData()
-  const { lines, total, plateNumber } = useCart()
+  const { business, device, discounts } = useKasirData()
+  const { lines, total: subtotal, plateNumber, order } = useCart()
   const [saving, setSaving] = useState(false)
+  // Decision #35: only presets the owner switched on, and only ones below the subtotal.
+  const discountOptions = applicableDiscounts(discounts, subtotal)
+  const [discountId, setDiscountId] = useState<string>('none')
+  const discount = discountOptions.find((d) => d.id === discountId) ?? null
+  const cut = discount ? discountAmount(subtotal, discount.type, discount.value) : 0
+  const total = subtotal - cut
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [cash, setCash] = useState<number | null>(null)
   const change = cash === null ? null : computeChange(total, cash)
@@ -97,6 +104,8 @@ function PaymentForm({ onSaved }: { onSaved: (transaction: Transaction) => void 
         method,
         cashReceived: method === 'cash' ? cash : null,
         plateNumber,
+        discount,
+        orderId: order?.id ?? null,
       })
       if (result.ok) onSaved(result.value)
       else toast.error(result.error)
@@ -122,10 +131,53 @@ function PaymentForm({ onSaved }: { onSaved: (transaction: Transaction) => void 
       <DialogHeader>
         <DialogTitle>Pembayaran</DialogTitle>
         <DialogDescription>
+          {cut > 0 && (
+            <>
+              <span className="tabular-nums line-through">{formatRupiah(subtotal)}</span>{' '}
+            </>
+          )}
           Total tagihan{' '}
           <span className="font-semibold text-foreground tabular-nums">{formatRupiah(total)}</span>
+          {order?.plateNumber && <> · {order.plateNumber}</>}
         </DialogDescription>
       </DialogHeader>
+
+      {discountOptions.length > 0 && (
+        <div className="grid gap-2">
+          <p className="text-sm font-medium">Diskon</p>
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            value={discountId}
+            onValueChange={(value) => {
+              setDiscountId(value || 'none')
+              setCash(null)
+            }}
+            className="flex w-full flex-wrap justify-start gap-2"
+            aria-label="Diskon"
+          >
+            <ToggleGroupItem
+              value="none"
+              className="h-10 flex-none rounded-full! border! px-4 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+            >
+              Tanpa diskon
+            </ToggleGroupItem>
+            {discountOptions.map((option) => (
+              <ToggleGroupItem
+                key={option.id}
+                value={option.id}
+                className="h-10 flex-none rounded-full! border! px-4 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+              >
+                {option.name}
+                <span className="text-xs opacity-80">
+                  {describeDiscount(option)} · −
+                  {formatRupiah(discountAmount(subtotal, option.type, option.value))}
+                </span>
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+      )}
 
       <ToggleGroup
         type="single"

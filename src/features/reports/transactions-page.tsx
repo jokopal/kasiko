@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { BanIcon, DownloadIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -20,29 +21,38 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PageLoading } from '@/components/page-loading'
+import { fetchTransactions } from '@/features/data/owner'
+import { voidTransactionAsOwner } from '@/features/data/owner-actions'
+import { useOwnerData } from '@/features/data/owner-data'
+import { keys } from '@/features/data/query-client'
 import { OwnerPage } from '@/features/owner/page'
-import { voidTransactionAsOwner } from '@/features/preview/actions'
-import { useBusinessData } from '@/features/preview/selectors'
-import { formatDateTime, isInRange } from '@/lib/datetime'
+import { formatDateTime } from '@/lib/datetime'
 import { formatRupiah, sumRupiah } from '@/lib/money'
 import { PAYMENT_METHOD_LABEL, PAYMENT_METHODS, type Transaction } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { downloadCsv, downloadWorkbook } from './monthly-export'
 import { PeriodPicker } from './period-picker'
+import { transactionSheetRows } from './table-export'
 import { usePeriod } from './use-period'
 
 const PAGE_SIZE = 50
 
 export function TransactionsPage() {
-  const { business, transactions } = useBusinessData()
+  const { business } = useOwnerData()
   const tz = business.timezone
   const period = usePeriod(tz)
+  const query = useQuery({
+    queryKey: keys.list(business.id, 'transactions', period.firstDayKey, period.lastDayKey),
+    queryFn: () => fetchTransactions(business.id, period.range.from, period.range.to),
+  })
+  const transactions = query.data ?? []
   const [method, setMethod] = useState('all')
   const [status, setStatus] = useState('all')
   const [limit, setLimit] = useState(PAGE_SIZE)
   const [target, setTarget] = useState<Transaction | null>(null)
 
   const rows = transactions
-    .filter((t) => isInRange(new Date(t.occurredAt), period.range))
     .filter((t) => method === 'all' || t.paymentMethod === method)
     .filter((t) => status === 'all' || t.status === status)
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
@@ -56,13 +66,32 @@ export function TransactionsPage() {
       title="Transaksi"
       description={`${rows.length} transaksi · total lunas ${formatRupiah(paidTotal)}`}
       actions={
-        <Button
-          variant="outline"
-          onClick={() => toast.info('Ekspor Excel/CSV dikerjakan pada milestone Rekap')}
-        >
-          <DownloadIcon />
-          Ekspor
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            disabled={rows.length === 0}
+            onClick={() =>
+              void downloadWorkbook(`${business.name} - Transaksi ${period.firstDayKey}.xlsx`, [
+                { name: 'Transaksi', rows: transactionSheetRows(rows, tz) },
+              ])
+            }
+          >
+            <DownloadIcon />
+            Excel
+          </Button>
+          <Button
+            variant="outline"
+            disabled={rows.length === 0}
+            onClick={() =>
+              void downloadCsv(
+                `${business.name} - Transaksi ${period.firstDayKey}.csv`,
+                transactionSheetRows(rows, tz),
+              )
+            }
+          >
+            CSV
+          </Button>
+        </div>
       }
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -91,6 +120,11 @@ export function TransactionsPage() {
           </SelectContent>
         </Select>
       </div>
+
+      {query.isPending && <PageLoading />}
+      {query.error && (
+        <p className="text-sm text-destructive">Transaksi gagal dimuat: {query.error.message}</p>
+      )}
 
       {/* Phone: cards */}
       <ul className="grid gap-2 md:hidden">
@@ -171,6 +205,11 @@ export function TransactionsPage() {
                   )}
                 >
                   {formatRupiah(t.total)}
+                  {t.discountAmount > 0 && (
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      {t.discountName} −{formatRupiah(t.discountAmount)}
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   {t.status === 'paid' ? (
@@ -212,9 +251,9 @@ export function TransactionsPage() {
         onOpenChange={(open) => !open && setTarget(null)}
         title="Batalkan transaksi?"
         description={target ? `${target.receiptNo} · ${formatRupiah(target.total)}` : ''}
-        onConfirm={(reason) => {
+        onConfirm={async (reason) => {
           if (!target) return { ok: false, error: 'Tidak ada transaksi dipilih' }
-          const result = voidTransactionAsOwner(target.id, reason)
+          const result = await voidTransactionAsOwner(business.id, target.id, reason)
           if (result.ok) toast.success('Transaksi dibatalkan')
           return result
         }}

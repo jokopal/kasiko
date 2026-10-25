@@ -5,6 +5,7 @@ import {
   Trash2Icon,
   UploadIcon,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -38,9 +39,10 @@ import {
 import { findTemplate, normalizeLabel, suggestCategory } from '@/features/business/templates'
 import { KindDot } from '@/features/expenses/kind'
 import { OwnerPage } from '@/features/owner/page'
-import { clearHistory, importHistory } from '@/features/preview/actions'
-import { useBusinessData } from '@/features/preview/selectors'
-import { businessDayKey } from '@/lib/datetime'
+import { fetchHistoricalDays, fetchLiveDays } from '@/features/data/owner'
+import { clearHistory, importHistory } from '@/features/data/owner-actions'
+import { useOwnerData } from '@/features/data/owner-data'
+import { keys } from '@/features/data/query-client'
 import { formatRupiah, sumRupiah } from '@/lib/money'
 import { EXPENSE_KIND_LABEL, EXPENSE_KINDS, type ExpenseCategory } from '@/lib/types'
 import {
@@ -61,9 +63,7 @@ const SOURCE_LABEL: Record<Source, string> = {
 }
 
 export function ImportPage() {
-  const { business, config, expenseCategories, transactions, expenses, historicalDays } =
-    useBusinessData()
-  const tz = business.timezone
+  const { business, config, expenseCategories } = useOwnerData()
   const [fileName, setFileName] = useState<string | null>(null)
   const [parsed, setParsed] = useState<ParsedWorkbook | null>(null)
   const [overrides, setOverrides] = useState<Record<string, string>>({})
@@ -72,14 +72,20 @@ export function ImportPage() {
   const input = useRef<HTMLInputElement>(null)
 
   const active = expenseCategories.filter((c) => c.isActive)
-  const liveDayKeys = useMemo(
-    () =>
-      new Set([
-        ...transactions.map((t) => businessDayKey(new Date(t.occurredAt), tz)),
-        ...expenses.map((e) => businessDayKey(new Date(e.occurredAt), tz)),
-      ]),
-    [transactions, expenses, tz],
-  )
+  const imported = useQuery({
+    queryKey: keys.list(business.id, 'history'),
+    queryFn: () => fetchHistoricalDays(business.id),
+  })
+  // Days the file covers that already hold cashier data are skipped (decision #27).
+  const fileDays = parsed?.months.flatMap((m) => m.days.map((d) => d.dayKey)) ?? []
+  const firstFileDay = fileDays.reduce((min, key) => (min === '' || key < min ? key : min), '')
+  const lastFileDay = fileDays.reduce((max, key) => (key > max ? key : max), '')
+  const live = useQuery({
+    queryKey: keys.list(business.id, 'live-days', firstFileDay, lastFileDay),
+    queryFn: () => fetchLiveDays(business.id, firstFileDay, lastFileDay),
+    enabled: firstFileDay !== '',
+  })
+  const liveDayKeys = useMemo(() => live.data ?? new Set<string>(), [live.data])
 
   // Label → category: owner's choice, then the remembered mapping, then template rules.
   // Anything still unknown is not imported until the owner picks a category (decision #29).
@@ -109,7 +115,7 @@ export function ImportPage() {
   }, [parsed, overrides, config, active])
 
   const plan = useMemo(() => {
-    if (!parsed) return null
+    if (!parsed || !live.data) return null
     const ids = Object.fromEntries(Object.entries(mapping).map(([k, v]) => [k, v.categoryId]))
     const unmapped = parsed.labels.filter((l) => !ids[l.key])
     if (unmapped.length > 0) return { ok: false as const, unmapped: unmapped.length }
@@ -118,7 +124,7 @@ export function ImportPage() {
       ids,
       ...planImport(parsed, ids, { businessId: business.id, liveDayKeys, now: new Date() }),
     }
-  }, [parsed, mapping, business.id, liveDayKeys])
+  }, [parsed, live.data, mapping, business.id, liveDayKeys])
 
   async function onFile(file: File | undefined) {
     if (!file) return
@@ -140,9 +146,9 @@ export function ImportPage() {
     }
   }
 
-  function commit() {
+  async function commit() {
     if (!plan?.ok) return
-    const result = importHistory(business.id, plan.days, plan.ids)
+    const result = await importHistory(business.id, plan.days, plan.ids)
     if (!result.ok) {
       toast.error(result.error)
       return
@@ -193,6 +199,11 @@ export function ImportPage() {
             </CardContent>
           </Card>
 
+          {parsed && !plan && (
+            <p className="text-sm text-muted-foreground">
+              {live.error ? `Gagal memeriksa tanggal: ${live.error.message}` : 'Memeriksa tanggal…'}
+            </p>
+          )}
           {parsed && plan && (
             <>
               <Card>
@@ -320,7 +331,10 @@ export function ImportPage() {
                   <Button variant="outline" onClick={() => setParsed(null)}>
                     Batal
                   </Button>
-                  <Button onClick={commit} disabled={!plan.ok || plan.days.length === 0}>
+                  <Button
+                    onClick={() => void commit()}
+                    disabled={!plan.ok || plan.days.length === 0}
+                  >
                     <CheckCircle2Icon />
                     Impor {plan.ok ? `${plan.days.length} hari` : ''}
                   </Button>
@@ -330,7 +344,7 @@ export function ImportPage() {
           )}
         </div>
 
-        <ImportedSummary days={historicalDays} onClear={() => setConfirmClear(true)} />
+        <ImportedSummary days={imported.data ?? []} onClear={() => setConfirmClear(true)} />
       </div>
 
       <Dialog open={confirmClear} onOpenChange={setConfirmClear}>
@@ -349,9 +363,11 @@ export function ImportPage() {
             <Button
               variant="destructive"
               onClick={() => {
-                clearHistory(business.id)
-                setConfirmClear(false)
-                toast.success('Data impor dihapus')
+                void clearHistory(business.id).then((result) => {
+                  setConfirmClear(false)
+                  if (result.ok) toast.success('Data impor dihapus')
+                  else toast.error(result.error)
+                })
               }}
             >
               Hapus data impor

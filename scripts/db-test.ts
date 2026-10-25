@@ -3,11 +3,19 @@
 // kept. The connection string comes from the environment, never from the repo:
 //
 //   node --env-file=.env.bootstrap scripts/db-test.ts
+//   node --env-file=.env.bootstrap scripts/db-test.ts --with supabase/migrations/<new>.sql
+//
+// `--with` runs a not-yet-applied migration inside each test transaction first, so a new
+// migration is proven against the real database before it is pushed.
 //
 // SUPABASE_DB_URL = session pooler URL (the direct db.<ref> host is IPv6-only).
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { parseArgs } from 'node:util'
 import pg from 'pg'
+
+const { values: args } = parseArgs({ options: { with: { type: 'string', multiple: true } } })
+const pending = (args.with ?? []).map((file) => readFileSync(file, 'utf8')).join('\n')
 
 const url = process.env.SUPABASE_DB_URL
 if (!url) {
@@ -28,7 +36,9 @@ for (const name of files) {
   try {
     // A multi-statement script yields one result per statement.
     const results = ([] as pg.QueryResult<Record<string, unknown>>[]).concat(
-      await client.query<Record<string, unknown>>(readFileSync(join(dir, name), 'utf8')),
+      await client.query<Record<string, unknown>>(
+        readFileSync(join(dir, name), 'utf8').replace(/^begin;/m, () => `begin;\n${pending}\n`),
+      ),
     )
     const lines = results
       .flatMap((r) => r.rows)

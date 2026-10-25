@@ -92,7 +92,7 @@ Nomor dipertahankan karena dirujuk di kode dan migrasi. Bila dua keputusan berte
 | # | Topik | Keputusan |
 |---|-------|-----------|
 | 1 | Tenancy | Satu owner, banyak usaha. Semua data bisnis punya `business_id`. Tidak ada pendaftaran publik/SaaS, tapi skema tidak menghalangi ke sana. |
-| 2 | Katalog | Jasa dengan **harga tetap per item**, tanpa varian/stok, dikelompokkan dalam kategori. Kategori, item, harga, urutan diatur owner; kasir hanya memilih. |
+| 2 | Katalog | Jasa dengan **harga tetap per item**, tanpa varian/stok, dikelompokkan dalam kategori. Kategori, item, harga, urutan diatur owner; kasir hanya memilih. *Potongan harga hanya lewat preset diskon owner (#35).* |
 | 3 | Pembayaran | **Tunai, QRIS, Transfer** — non-tunai dicatat manual ("sudah dibayar"). Tanpa payment gateway. Kembalian hanya untuk tunai. Rekap memisahkan per metode. |
 | 4 | Akun kasir | **Satu akun kasir per usaha**, login sekali di perangkat. Tidak ada pencatatan per orang. |
 | 5 | Nota | (a) printer thermal **Bluetooth** (ESC/POS via Web Bluetooth, tombol hanya muncul bila `navigator.bluetooth` ada), (b) print browser, (c) WhatsApp. |
@@ -139,6 +139,13 @@ Nomor dipertahankan karena dirujuk di kode dan migrasi. Bila dua keputusan berte
 | 31 | Katalog Saimara | Tidak memakai data Olsera; katalog & harga **dibangun owner dari awal**. Harga di template hanya contoh. |
 | 32 | Skema database | Migrasi di `supabase/migrations`. Dua peran via `business_members` (satu akun satu peran, satu kasir per usaha, `is_active` memutus akses seketika). Ambang waktu perangkat: **> 5 menit di depan** atau **> 72 jam terlambat** → `needs_review`; batal kasir di luar ambang ditolak. Retry batal idempoten hanya bila membawa waktu perangkat yang sama. `seed.sql` hanya untuk lokal, dihasilkan dari template. |
 | 33 | Proyek & Edge Function | Memakai **proyek Supabase owner yang sudah ada**, tanpa Docker lokal. Kredensial hanya di file lokal ter-ignore. Data harian lewat **RPC/RLS** (langsung ke database, cocok untuk offline). **Edge Function hanya untuk operasi ber-hak service role:** `manage-cashier` dan `bootstrap-owner`. Akun owner ditandai `app_metadata.kasiko_role = 'owner'`; hanya akun itu yang boleh `create_business`. |
+
+### Keputusan tambahan — 2026-10-25
+
+| # | Topik | Keputusan |
+|---|-------|-----------|
+| 34 | Bayar di akhir | Mobil dicatat sebagai **pesanan terbuka** (`orders`: layanan, plat, total) saat masuk; dibayar saat selesai lewat transaksi biasa (`create_transaction` dengan `order_id`) yang menutup pesanan dalam satu transaksi DB. Pesanan bukan pemasukan; disimpan lewat outbox (offline, idempoten, edit terbaru menurut waktu perangkat menang); kasir melihat semua pesanan terbuka; batal wajib alasan. Menjawab Pertanyaan #4. |
+| 35 | Diskon | Ada, **atas aktivasi owner**: owner membuat preset (`discounts`: persen 1–100 atau nominal) dan menyalakan/mematikannya; kasir hanya memilih preset aktif. Server menghitung ulang potongan (persen dibulatkan ke bawah), menolak potongan ≥ subtotal, dan menerima snapshot preset seperti harga (#15). Transaksi menyimpan `subtotal`, snapshot diskon, `discount_amount`, `total = subtotal − diskon`. Owner melihat total diskon per periode. Menjawab Pertanyaan #13; melengkapi #2. |
 
 ---
 
@@ -210,6 +217,9 @@ scripts/          bootstrap-owner.ts, db-test.ts (rahasia dari .env.bootstrap)
 | `reserve_movements` | setor/tarik cadangan (append-only) | — |
 | `historical_days`, `historical_expenses` | impor Excel | — |
 | `audit_log` | jejak perubahan & pembatalan owner | — |
+| `orders` | pesanan terbuka "bayar di akhir" (#34) | semua yang terbuka + hari ini |
+| `discounts` | preset diskon owner (#35) | yang aktif |
+| Storage `logos` | logo usaha di folder `<business_id>/` | baca publik, tulis owner |
 
 **Uang** selalu integer rupiah (`bigint`). **Waktu** `timestamptz`; batas hari memakai zona
 waktu usaha.
@@ -287,14 +297,15 @@ Legenda: ✅ selesai & teruji · 🟡 ada di **mode pratinjau** saja (belum mema
 | Edge Function `manage-cashier`, `bootstrap-owner` | ✅ | ter-deploy & diuji penolakan aksesnya |
 | Akun owner & usaha Saimara di produksi | ✅ | dibuat 2026-10-25 dari template `cuci-mobil` |
 | Sign-up publik mati | ✅ | dimatikan owner di dashboard |
-| Login & peran memakai Supabase Auth | ⬜ | login masih tombol "Masuk sebagai…" pratinjau |
-| Data aplikasi dari database | ⬜ | 17 file masih memakai `features/preview` |
+| Login & peran memakai Supabase Auth | ✅ | owner (email) & kasir (nama pengguna); sesi tersimpan untuk kasir offline |
+| Data aplikasi dari database | ✅ | mode pratinjau **dihapus** (#23); kasir via RPC + outbox, owner via RLS/RPC + TanStack Query |
+| Bayar di akhir (pesanan) & diskon | ✅ | kode + 34 tes pgTAP; **migrasi `0600` menunggu diterapkan ke produksi** |
 | Kasir: POS, bayar, nota (print/WA), riwayat, ringkasan, batal, pengeluaran laci | 🟡 | lengkap di pratinjau; Bluetooth belum diuji printer fisik |
 | Offline: outbox, sync, registrasi perangkat, PWA | 🟡 | teruji offline→online dengan transport tiruan |
-| Owner Monitor: dashboard, rekap bulanan, transaksi + ekspor | 🟡 | agregasi dihitung di browser, bukan SQL |
-| Owner Manajemen: pengeluaran, cadangan, impor Excel | 🟡 | ekspor pengeluaran belum ada; rumus kas bebas belum dikonfirmasi |
-| Owner Admin: katalog, kategori, pengaturan, template, tambah usaha | 🟡 | akun kasir masih tiruan; upload logo belum ada |
-| Storage logo | ⬜ | bucket + policy belum dibuat |
+| Owner Monitor: dashboard, rekap bulanan, transaksi + ekspor | ✅ | angka dari fungsi SQL; ekspor Excel/CSV transaksi |
+| Owner Manajemen: pengeluaran, cadangan, impor Excel | ✅ | ekspor pengeluaran; rumus kas bebas masih menunggu konfirmasi (#9) |
+| Owner Admin: katalog, kategori, diskon, pengaturan, template, tambah usaha, akun kasir | ✅ | akun kasir via `manage-cashier`; upload logo ke Storage |
+| Storage logo | ✅ | bucket `logos` + policy (dalam migrasi `0600`) |
 | Hosting & domain | ⬜ | belum dipilih / belum deploy |
 | Riwayat Excel 2025–2026 di produksi | ⬜ | alat impor siap, menunggu R1 |
 | Operasional produksi (backup, monitoring, SMTP) | ⬜ | Pertanyaan #14 |
@@ -308,10 +319,10 @@ Dikerjakan berurutan; setiap langkah ditutup dengan tes hijau dan demo singkat k
 
 | Langkah | Isi | Menutup |
 |---------|-----|---------|
-| **R1. Sambungkan ke Supabase** | Supabase Auth (owner: email; kasir: nama pengguna → `@kasir.kasiko.invalid`), sesi tersimpan untuk kasir offline, guard peran, pemilih usaha dari `business_members`; lapisan data Supabase + TanStack Query untuk owner; transport sync kasir → RPC; registrasi perangkat → `register_device`; cache katalog dari database. **Hapus `features/preview`** (#23). E2E jalan terhadap database. | "Data aplikasi dari database", "Login" |
-| **R2. Admin di database** | Katalog & kategori (tulis via RLS), pengaturan usaha, terapkan template, tambah usaha (`create_business`), akun kasir via `manage-cashier`, **upload logo** (bucket Storage + RLS + tes). | Admin 🟡 → ✅, Storage |
+| **R1. Sambungkan ke Supabase** ✅ kode (2026-10-25) | Supabase Auth (owner: email; kasir: nama pengguna → `@kasir.kasiko.invalid`), sesi tersimpan untuk kasir offline, guard peran, pemilih usaha dari `business_members`; lapisan data Supabase + TanStack Query untuk owner; transport sync kasir → RPC; registrasi perangkat → `register_device`; cache katalog dari database. **Hapus `features/preview`** (#23). E2E jalan terhadap database. | "Data aplikasi dari database", "Login" |
+| **R2. Admin di database** ✅ kode (2026-10-25) | Katalog & kategori (tulis via RLS), pengaturan usaha, terapkan template, tambah usaha (`create_business`), akun kasir via `manage-cashier`, **upload logo** (bucket Storage + RLS + tes). | Admin 🟡 → ✅, Storage |
 | **R3. Hosting** | Pilih hosting (Pertanyaan #18), env publishable key, HTTPS, PWA ter-install di perangkat kasir. | Hosting |
-| **R4. Rekap via SQL** | Fungsi SQL untuk deret harian/bulanan, layanan terlaris, jam × hari, matriks rekap bulanan (`period_totals` sudah ada); ekspor pengeluaran; daftar pembatalan; impor riwayat Excel Saimara ke produksi lewat `import_history`. | Monitor & Manajemen, riwayat |
+| **R4. Rekap via SQL** ✅ fungsi & dashboard (2026-10-25); impor riwayat Saimara ke produksi belum | Fungsi SQL untuk deret harian/bulanan, layanan terlaris, jam × hari, matriks rekap bulanan (`period_totals` sudah ada); ekspor pengeluaran; daftar pembatalan; impor riwayat Excel Saimara ke produksi lewat `import_history`. | Monitor & Manajemen, riwayat |
 | **R5. Cadangan & kas bebas** | Konfirmasi rumus (Pertanyaan #9), UI di database. | Manajemen |
 | **R6. Pengerasan** | Uji di perangkat kasir nyata + printer (Pertanyaan #2–#3), audit aksesibilitas, backup & pemantauan error (Pertanyaan #14), uji beban 1 tahun data. | Go-live |
 
@@ -340,19 +351,18 @@ Yang **masih terbuka** (tanyakan sebelum fitur terkait dikerjakan):
 |---|------------|------------------|
 | 2 | Perangkat kasir Saimara: Android, iPhone/iPad, atau laptop? (iOS tidak bisa cetak Bluetooth langsung.) | R3, R6 |
 | 3 | Printer thermal: sudah ada? Merek/tipe, 58 atau 80 mm? **Wajib BLE** — Web Bluetooth tidak bisa ke Bluetooth Classic (SPP). | R6 |
-| 4 | Bayar di awal atau di akhir? Asumsi: lunas saat dicatat. Bila di akhir, perlu "mobil dalam pengerjaan / belum bayar". | R1 |
 | 5 | Daftar layanan & harga Saimara (owner membangun sendiri, #31) — kapan siap? | Go-live |
 | 6 | Logo & warna Saimara. | R2 |
 | 7 | Zona waktu Saimara (WIB/WITA/WIT) — menentukan batas "hari ini". Saat ini WIB. | R1 |
 | 9 | Konfirmasi rumus kas bebas & arti saldo awal kas (bagian 7). | R5 |
 | 11 | Dana cadangan terpisah per usaha? (asumsi: ya) | R5 |
 | 12 | Modal awal laci & tutup kasir (hitung fisik, setoran ke owner, selisih)? | Usulan R4/R5 |
-| 13 | Diskon / harga khusus — memang tidak pernah ada? | R1 |
 | 14 | Lingkungan produksi: staging terpisah, backup (paket Supabase), SMTP untuk reset kata sandi owner, pemantauan error. | R6 |
 | 18 | Hosting: Vercel, Netlify, atau Cloudflare Pages? Domain sendiri? | R3 |
 | 19 | Nonaktifkan kunci JWT lama setelah aplikasi memakai kunci baru? | setelah R1 |
+| 20 | E2E yang menulis data: proyek **staging** terpisah (disarankan) atau **usaha uji tersembunyi** di produksi? Kode perangkat tidak pernah dipakai ulang (#16), jadi E2E tidak bisa terus memakai satu usaha. | E2E penuh |
 
-Sudah terjawab: #1 stack (#13) · #8 proyek Supabase (#33) · #10 kategori pengeluaran
+Sudah terjawab: #4 bayar di akhir (#34) · #13 diskon (#35) · #1 stack (#13) · #8 proyek Supabase (#33) · #10 kategori pengeluaran
 (#24–#26) · #15 label Excel tak jelas (#29) · #16 upah harian (#30) · #17 Olsera (#31).
 
 ## 13. Ditunda (bukan cakupan Rilis 1)

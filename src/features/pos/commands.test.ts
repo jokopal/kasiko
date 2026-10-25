@@ -103,6 +103,7 @@ describe('recordDrawerExpense', () => {
   it('queues a drawer expense', async () => {
     const result = await recordDrawerExpense({
       businessId: 'biz',
+      deviceId: 'dev-1',
       categories,
       categoryId: 'c1',
       amount: 20_000,
@@ -112,13 +113,13 @@ describe('recordDrawerExpense', () => {
   })
 
   it('rejects inactive categories and zero amounts', async () => {
-    const base = { businessId: 'biz', categories, note: '' }
+    const base = { businessId: 'biz', deviceId: 'dev-1', categories, note: '' }
     expect((await recordDrawerExpense({ ...base, categoryId: 'c2', amount: 1 })).ok).toBe(false)
     expect((await recordDrawerExpense({ ...base, categoryId: 'c1', amount: 0 })).ok).toBe(false)
   })
 
   it('rejects categories the owner keeps off the cashier screen', async () => {
-    const base = { businessId: 'biz', categories, note: '', amount: 10_000 }
+    const base = { businessId: 'biz', deviceId: 'dev-1', categories, note: '', amount: 10_000 }
     expect((await recordDrawerExpense({ ...base, categoryId: 'c3' })).ok).toBe(false)
   })
 })

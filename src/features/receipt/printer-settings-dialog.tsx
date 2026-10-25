@@ -26,6 +26,12 @@ function testTransaction(business: Business): Transaction {
     occurredAt: new Date().toISOString(),
     plateNumber: null,
     paymentMethod: 'cash',
+    subtotal: 0,
+    discountId: null,
+    discountName: null,
+    discountType: null,
+    discountValue: null,
+    discountAmount: 0,
     total: 0,
     cashReceived: 0,
     changeAmount: 0,
@@ -34,6 +40,7 @@ function testTransaction(business: Business): Transaction {
     voidedAt: null,
     deviceId: 'test',
     receivedAt: null,
+    orderId: null,
     items: [
       {
         id: 'test',

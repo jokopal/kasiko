@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { ArrowDownToLineIcon, ArrowUpFromLineIcon } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
@@ -16,25 +17,32 @@ import {
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { fetchFreeCash, fetchReserveBalance, fetchReserveMovements } from '@/features/data/owner'
+import { addReserveMovement } from '@/features/data/owner-actions'
+import { useOwnerData } from '@/features/data/owner-data'
+import { keys } from '@/features/data/query-client'
 import { OwnerPage } from '@/features/owner/page'
-import { addReserveMovement } from '@/features/preview/actions'
-import { useBusinessData } from '@/features/preview/selectors'
-import { freeCash, reserveBalance } from '@/features/reports/finance'
 import { formatDateTime } from '@/lib/datetime'
 import { formatRupiah } from '@/lib/money'
 import type { ReserveDepositSource, ReserveMovementType } from '@/lib/types'
 
 export function ReservePage() {
-  const { business, transactions, expenses, reserveMovements } = useBusinessData()
+  const { business } = useOwnerData()
   const [dialog, setDialog] = useState<ReserveMovementType | null>(null)
-  const balance = reserveBalance(reserveMovements)
-  const free = freeCash({
-    openingCash: business.openingCash,
-    transactions,
-    expenses,
-    reserveMovements,
+  const query = useQuery({
+    queryKey: keys.list(business.id, 'reserve'),
+    queryFn: async () => {
+      const [movements, balance, free] = await Promise.all([
+        fetchReserveMovements(business.id),
+        fetchReserveBalance(business.id),
+        fetchFreeCash(business.id),
+      ])
+      return { movements, balance, free }
+    },
   })
-  const history = [...reserveMovements].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
+  const balance = query.data?.balance ?? 0
+  const free = query.data?.free ?? 0
+  const history = query.data?.movements ?? []
 
   return (
     <OwnerPage
@@ -157,9 +165,15 @@ function MovementForm({
   const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault()
-    const result = addReserveMovement({ businessId, type, amount: amount ?? 0, source, reason })
+    const result = await addReserveMovement({
+      businessId,
+      type,
+      amount: amount ?? 0,
+      source,
+      reason,
+    })
     if (!result.ok) {
       setError(result.error)
       return
@@ -169,7 +183,7 @@ function MovementForm({
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-5">
+    <form onSubmit={(event) => void submit(event)} className="grid gap-5">
       <DialogHeader>
         <DialogTitle>
           {type === 'deposit' ? 'Setor ke cadangan' : 'Tarik dari cadangan'}

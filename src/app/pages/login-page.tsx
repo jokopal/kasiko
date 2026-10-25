@@ -1,30 +1,48 @@
 import { BarChart3Icon, ReceiptTextIcon } from 'lucide-react'
-import type { FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
-import { homePathFor, signInPreview, useSession } from '@/features/auth/session'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { homePathFor, signInCashier, signInOwner, useAuthState } from '@/features/auth/session'
 import { isSupabaseConfigured } from '@/lib/supabase'
-import type { Role } from '@/lib/types'
+import { LoadingScreen } from './loading-screen'
+
+type Mode = 'cashier' | 'owner'
 
 export function LoginPage() {
-  const session = useSession()
+  const auth = useAuthState()
   const navigate = useNavigate()
+  const [mode, setMode] = useState<Mode>('cashier')
+  const [identity, setIdentity] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
-  if (session) return <Navigate to={homePathFor(session.role)} replace />
+  if (auth.status === 'loading') return <LoadingScreen />
+  if (auth.status === 'signedIn') return <Navigate to={homePathFor(auth.session.role)} replace />
 
-  function enterPreview(role: Role) {
-    signInPreview(role)
-    void navigate(homePathFor(role), { replace: true })
-  }
-
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault()
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    const result =
+      mode === 'owner'
+        ? await signInOwner(identity, password)
+        : await signInCashier(identity, password)
+    setBusy(false)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    void navigate('/', { replace: true })
   }
+
+  const notice = auth.message
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-muted/40 p-4">
@@ -40,25 +58,60 @@ export function LoginPage() {
         <Card>
           <CardHeader>
             <CardTitle>Masuk</CardTitle>
-            <CardDescription>Gunakan akun owner atau akun kasir usaha Anda.</CardDescription>
+            <CardDescription>
+              Kasir masuk dengan nama pengguna dari owner; owner masuk dengan email.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             {!isSupabaseConfigured && (
-              <Alert>
-                <AlertTitle>Login belum aktif</AlertTitle>
+              <Alert variant="destructive">
+                <AlertTitle>Belum tersambung ke database</AlertTitle>
                 <AlertDescription>
-                  Database belum tersambung. Gunakan mode pratinjau di bawah untuk mencoba aplikasi.
+                  Isi VITE_SUPABASE_URL dan VITE_SUPABASE_PUBLISHABLE_KEY di pengaturan hosting.
                 </AlertDescription>
               </Alert>
             )}
-            <form onSubmit={submit}>
+            {notice && (
+              <Alert>
+                <AlertDescription>{notice}</AlertDescription>
+              </Alert>
+            )}
+
+            <Tabs
+              value={mode}
+              onValueChange={(value) => {
+                setMode(value as Mode)
+                setIdentity('')
+                setError(null)
+              }}
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="cashier" className="gap-1.5">
+                  <ReceiptTextIcon className="size-4" aria-hidden />
+                  Kasir
+                </TabsTrigger>
+                <TabsTrigger value="owner" className="gap-1.5">
+                  <BarChart3Icon className="size-4" aria-hidden />
+                  Owner
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            <form onSubmit={(event) => void submit(event)}>
               <FieldGroup>
                 <Field>
-                  <FieldLabel htmlFor="email">Email</FieldLabel>
+                  <FieldLabel htmlFor="identity">
+                    {mode === 'owner' ? 'Email' : 'Nama pengguna'}
+                  </FieldLabel>
                   <Input
-                    id="email"
-                    type="email"
+                    id="identity"
+                    type={mode === 'owner' ? 'email' : 'text'}
+                    value={identity}
+                    onChange={(e) => setIdentity(e.target.value)}
                     autoComplete="username"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    required
                     disabled={!isSupabaseConfigured}
                     className="h-11"
                   />
@@ -68,43 +121,25 @@ export function LoginPage() {
                   <Input
                     id="password"
                     type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     autoComplete="current-password"
+                    required
                     disabled={!isSupabaseConfigured}
                     className="h-11"
                   />
                 </Field>
-                <Button type="submit" size="lg" className="h-11" disabled={!isSupabaseConfigured}>
-                  Masuk
+                {error && <FieldError>{error}</FieldError>}
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="h-11"
+                  disabled={!isSupabaseConfigured || busy}
+                >
+                  {busy ? 'Memeriksa…' : 'Masuk'}
                 </Button>
               </FieldGroup>
             </form>
-
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <Separator className="flex-1" />
-              Mode pratinjau
-              <Separator className="flex-1" />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Button
-                variant="outline"
-                className="h-auto flex-col gap-1 py-4"
-                onClick={() => enterPreview('cashier')}
-              >
-                <ReceiptTextIcon className="size-5" />
-                <span className="font-medium">Masuk sebagai Kasir</span>
-                <span className="text-xs font-normal text-muted-foreground">Saimara</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-auto flex-col gap-1 py-4"
-                onClick={() => enterPreview('owner')}
-              >
-                <BarChart3Icon className="size-5" />
-                <span className="font-medium">Masuk sebagai Owner</span>
-                <span className="text-xs font-normal text-muted-foreground">Semua usaha</span>
-              </Button>
-            </div>
           </CardContent>
         </Card>
       </div>

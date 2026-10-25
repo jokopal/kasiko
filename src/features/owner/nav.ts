@@ -2,6 +2,7 @@ import {
   FileSpreadsheetIcon,
   LayoutDashboardIcon,
   PackageIcon,
+  PercentIcon,
   PiggyBankIcon,
   ReceiptTextIcon,
   SettingsIcon,
@@ -40,6 +41,7 @@ export const OWNER_NAV: { label: string; items: OwnerNavItem[] }[] = [
     label: 'Admin',
     items: [
       { to: '/owner/katalog', label: 'Katalog', icon: PackageIcon },
+      { to: '/owner/diskon', label: 'Diskon', icon: PercentIcon },
       { to: '/owner/kategori-pengeluaran', label: 'Kategori Pengeluaran', icon: TagsIcon },
       { to: '/owner/pengaturan', label: 'Pengaturan Usaha', icon: SettingsIcon },
       { to: '/owner/akun-kasir', label: 'Akun Kasir', icon: UserCogIcon },

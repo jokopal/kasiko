@@ -1,5 +1,6 @@
 import { ChevronUpIcon, ReceiptIcon } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,12 +21,20 @@ import { PaymentDialog } from './payment-dialog'
 const ALL = 'all'
 
 export function PosPage() {
-  const { business, catalogCategories, catalogItems, expenseCategories } = useKasirData()
+  const { business, catalogCategories, catalogItems, expenseCategories, device } = useKasirData()
   const { lines, total, quantity, dispatch } = useCart()
   const [categoryId, setCategoryId] = useState<string>(ALL)
   const [cartOpen, setCartOpen] = useState(false)
-  const [payOpen, setPayOpen] = useState(false)
+  const location = useLocation()
+  const navigate = useNavigate()
+  // "Bayar" on an open order lands here with the order in the cart (decision #34).
+  const wantsPayment = (location.state as { pay?: boolean } | null)?.pay === true
+  const [payOpen, setPayOpen] = useState(() => wantsPayment && lines.length > 0)
   const [expenseOpen, setExpenseOpen] = useState(false)
+  useEffect(() => {
+    // Consume the request so a reload or "back" does not reopen the payment.
+    if (wantsPayment) void navigate('.', { replace: true, state: null })
+  }, [wantsPayment, navigate])
 
   const activeItems = useMemo(() => catalogItems.filter((item) => item.isActive), [catalogItems])
   const categories = useMemo(
@@ -180,6 +189,7 @@ export function PosPage() {
         businessId={business.id}
         categories={expenseCategories}
         source="drawer"
+        deviceId={device.deviceId}
       />
     </div>
   )

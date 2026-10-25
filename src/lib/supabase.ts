@@ -1,9 +1,12 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
+// Only the public (publishable/anon) key ever reaches the browser; access is enforced by
+// RLS and the RPCs (AGENTS.md section 8). The service key lives in Edge Functions only.
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const supabaseKey =
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseKey)
 
 let client: SupabaseClient | null = null
 
@@ -12,12 +15,13 @@ let client: SupabaseClient | null = null
  * (and the offline cashier) still boots when configuration is missing.
  */
 export function getSupabase(): SupabaseClient {
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl || !supabaseKey) {
     throw new Error(
-      'Supabase belum dikonfigurasi: isi VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY',
+      'Supabase belum dikonfigurasi: isi VITE_SUPABASE_URL dan VITE_SUPABASE_PUBLISHABLE_KEY',
     )
   }
-  client ??= createClient(supabaseUrl, supabaseAnonKey, {
+  // The session persists in localStorage so the cashier can reopen the app offline.
+  client ??= createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
   })
   return client

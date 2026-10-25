@@ -19,8 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { selectBusiness } from '@/features/auth/session'
-import { createBusiness } from '@/features/preview/actions'
+import { createBusiness } from '@/features/data/owner-actions'
 import { suggestPrefix } from '@/features/receipt/receipt-number'
 import { BUSINESS_TIMEZONES } from '@/lib/datetime'
 import { BUSINESS_TEMPLATES } from './templates'
@@ -57,9 +56,9 @@ function AddBusinessForm({ onDone }: { onDone: () => void }) {
   const [templateId, setTemplateId] = useState(BUSINESS_TEMPLATES[0]?.id ?? 'umum')
   const [error, setError] = useState<string | null>(null)
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault()
-    const result = createBusiness({
+    const result = await createBusiness({
       name,
       receiptPrefix: prefix,
       primaryColor: color,
@@ -70,13 +69,12 @@ function AddBusinessForm({ onDone }: { onDone: () => void }) {
       setError(result.error)
       return
     }
-    selectBusiness(result.value.id)
     toast.success(`${result.value.name} dibuat`)
     onDone()
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-5">
+    <form onSubmit={(event) => void submit(event)} className="grid gap-5">
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="new-business-name">Nama usaha</FieldLabel>

@@ -25,14 +25,14 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { OwnerPage } from '@/features/owner/page'
 import {
+  moveCatalogCategory,
   moveCatalogItem,
-  moveCategory,
-  saveCatalogItem,
   saveCatalogCategory,
-  setCatalogItemActive,
-  setCategoryActive,
-} from '@/features/preview/actions'
-import { useBusinessData } from '@/features/preview/selectors'
+  saveCatalogItem,
+  setActive,
+} from '@/features/data/owner-actions'
+import { useOwnerData } from '@/features/data/owner-data'
+import { notify } from '@/features/data/notify'
 import { formatRupiah } from '@/lib/money'
 import type { CatalogCategory, CatalogItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -40,7 +40,7 @@ import { cn } from '@/lib/utils'
 type ItemDraft = { id?: string; name: string; price: number | null; categoryId: string }
 
 export function CatalogPage() {
-  const { business, catalogCategories, catalogItems } = useBusinessData()
+  const { business, catalogCategories, catalogItems } = useOwnerData()
   const [itemDraft, setItemDraft] = useState<ItemDraft | null>(null)
 
   return (
@@ -87,6 +87,12 @@ export function CatalogPage() {
                         item={item}
                         isFirst={index === 0}
                         isLast={index === items.length - 1}
+                        onMove={(id, direction) =>
+                          notify(moveCatalogItem(business.id, catalogItems, id, direction))
+                        }
+                        onToggle={(checked) =>
+                          notify(setActive(business.id, 'catalog_items', item.id, checked))
+                        }
                         onEdit={() =>
                           setItemDraft({
                             id: item.id,
@@ -121,6 +127,7 @@ export function CatalogPage() {
               draft={itemDraft}
               businessId={business.id}
               categories={catalogCategories}
+              items={catalogItems}
               onDone={() => setItemDraft(null)}
             />
           )}
@@ -172,11 +179,15 @@ function ItemRow({
   isFirst,
   isLast,
   onEdit,
+  onMove,
+  onToggle,
 }: {
   item: CatalogItem
   isFirst: boolean
   isLast: boolean
   onEdit: () => void
+  onMove: (id: string, direction: -1 | 1) => void
+  onToggle: (checked: boolean) => void
 }) {
   return (
     <li className="flex items-center gap-2 px-3 py-2 sm:px-4">
@@ -184,7 +195,7 @@ function ItemRow({
         <p className="truncate text-sm font-medium">{item.name}</p>
         <p className="text-sm tabular-nums">{formatRupiah(item.price)}</p>
       </div>
-      <OrderButtons id={item.id} isFirst={isFirst} isLast={isLast} onMove={moveCatalogItem} />
+      <OrderButtons id={item.id} isFirst={isFirst} isLast={isLast} onMove={onMove} />
       <Button
         variant="ghost"
         size="icon"
@@ -196,7 +207,7 @@ function ItemRow({
       </Button>
       <Switch
         checked={item.isActive}
-        onCheckedChange={(checked) => setCatalogItemActive(item.id, checked)}
+        onCheckedChange={onToggle}
         aria-label={`${item.name} aktif`}
       />
     </li>
@@ -207,11 +218,13 @@ function ItemForm({
   draft,
   businessId,
   categories,
+  items,
   onDone,
 }: {
   draft: ItemDraft
   businessId: string
   categories: CatalogCategory[]
+  items: CatalogItem[]
   onDone: () => void
 }) {
   const [name, setName] = useState(draft.name)
@@ -219,13 +232,20 @@ function ItemForm({
   const [categoryId, setCategoryId] = useState(draft.categoryId)
   const [error, setError] = useState<string | null>(null)
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault()
     if (price === null) {
       setError('Harga wajib diisi')
       return
     }
-    const result = saveCatalogItem({ id: draft.id, businessId, categoryId, name, price })
+    const result = await saveCatalogItem({
+      id: draft.id,
+      businessId,
+      categoryId,
+      name,
+      price,
+      siblings: items.filter((item) => item.categoryId === categoryId),
+    })
     if (!result.ok) {
       setError(result.error)
       return
@@ -235,7 +255,7 @@ function ItemForm({
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-5">
+    <form onSubmit={(event) => void submit(event)} className="grid gap-5">
       <DialogHeader>
         <DialogTitle>{draft.id ? 'Ubah layanan' : 'Tambah layanan'}</DialogTitle>
       </DialogHeader>
@@ -287,20 +307,19 @@ function ItemForm({
   )
 }
 
-function CategoryEditor({
-  businessId,
-  rows,
-}: {
-  businessId: string
-  rows: { id: string; name: string; isActive: boolean }[]
-}) {
+function CategoryEditor({ businessId, rows }: { businessId: string; rows: CatalogCategory[] }) {
   const [editing, setEditing] = useState<{ id?: string; name: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault()
     if (!editing) return
-    const result = saveCatalogCategory({ id: editing.id, businessId, name: editing.name })
+    const result = await saveCatalogCategory({
+      id: editing.id,
+      businessId,
+      name: editing.name,
+      siblings: rows,
+    })
     if (!result.ok) {
       setError(result.error)
       return
@@ -334,7 +353,9 @@ function CategoryEditor({
                 id={row.id}
                 isFirst={index === 0}
                 isLast={index === rows.length - 1}
-                onMove={(id, direction) => moveCategory('catalog', id, direction)}
+                onMove={(id, direction) =>
+                  notify(moveCatalogCategory(businessId, rows, id, direction))
+                }
               />
               <Button
                 variant="ghost"
@@ -347,7 +368,9 @@ function CategoryEditor({
               </Button>
               <Switch
                 checked={row.isActive}
-                onCheckedChange={(checked) => setCategoryActive('catalog', row.id, checked)}
+                onCheckedChange={(checked) =>
+                  notify(setActive(businessId, 'catalog_categories', row.id, checked))
+                }
                 aria-label={`${row.name} aktif`}
               />
             </li>
@@ -356,7 +379,7 @@ function CategoryEditor({
       </CardContent>
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="sm:max-w-sm">
-          <form onSubmit={submit} className="grid gap-5">
+          <form onSubmit={(event) => void submit(event)} className="grid gap-5">
             <DialogHeader>
               <DialogTitle>{editing?.id ? 'Ubah kategori' : 'Tambah kategori'}</DialogTitle>
             </DialogHeader>

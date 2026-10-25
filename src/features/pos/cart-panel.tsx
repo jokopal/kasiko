@@ -1,18 +1,73 @@
-import { MinusIcon, PlusIcon, ShoppingCartIcon, Trash2Icon } from 'lucide-react'
+import {
+  CarFrontIcon,
+  MinusIcon,
+  PlusIcon,
+  ShoppingCartIcon,
+  Trash2Icon,
+  XIcon,
+} from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { formatTime } from '@/lib/datetime'
 import { formatRupiah } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { lineTotal } from './cart'
+import { saveOrder } from './commands'
 import { useCart } from './use-cart'
+import { useKasirData } from './use-kasir-data'
 import { MAX_PLATE_LENGTH } from './plate'
 
 export function CartPanel({ onPay, className }: { onPay: () => void; className?: string }) {
-  const { lines, total, quantity, plateNumber, setPlateNumber, dispatch, reset } = useCart()
+  const { lines, total, quantity, plateNumber, setPlateNumber, dispatch, reset, order } = useCart()
+  const { business, device } = useKasirData()
+  const [saving, setSaving] = useState(false)
+
+  // Decision #34: check the car in now, take the money when it is done.
+  async function payLater() {
+    if (saving || lines.length === 0) return
+    setSaving(true)
+    try {
+      const result = await saveOrder({ business, device, lines, plateNumber, existing: order })
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      toast.success(
+        `${order ? 'Pesanan diperbarui' : 'Pesanan disimpan'}${
+          result.value.plateNumber ? ` · ${result.value.plateNumber}` : ''
+        } — bayar nanti di menu Pesanan`,
+      )
+      reset()
+    } catch {
+      toast.error('Gagal menyimpan di perangkat. Coba lagi.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className={cn('flex min-h-0 flex-col', className)}>
+      {order && (
+        <div className="mx-4 mt-4 flex items-center gap-2 rounded-lg border border-primary/40 bg-brand-soft px-3 py-2 text-sm">
+          <CarFrontIcon className="size-4 shrink-0 text-brand-ink" aria-hidden />
+          <span className="min-w-0 flex-1 truncate">
+            Pesanan {order.plateNumber ?? 'tanpa plat'} · masuk{' '}
+            {formatTime(new Date(order.openedAt), business.timezone)}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={reset}
+            aria-label="Tutup pesanan dari keranjang"
+          >
+            <XIcon />
+          </Button>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
         <h2 className="font-semibold">
           Keranjang{' '}
@@ -98,14 +153,26 @@ export function CartPanel({ onPay, className }: { onPay: () => void; className?:
             {formatRupiah(total)}
           </span>
         </div>
-        <Button
-          size="lg"
-          className="h-14 w-full text-lg font-semibold"
-          disabled={lines.length === 0}
-          onClick={onPay}
-        >
-          Bayar
-        </Button>
+        <div className="grid gap-2">
+          <Button
+            variant="outline"
+            size="lg"
+            className="h-11 w-full"
+            disabled={lines.length === 0 || saving}
+            onClick={() => void payLater()}
+          >
+            <CarFrontIcon />
+            {order ? 'Simpan perubahan, bayar nanti' : 'Simpan, bayar nanti'}
+          </Button>
+          <Button
+            size="lg"
+            className="h-14 w-full text-lg font-semibold"
+            disabled={lines.length === 0}
+            onClick={onPay}
+          >
+            Bayar
+          </Button>
+        </div>
       </div>
     </div>
   )

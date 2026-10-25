@@ -114,7 +114,7 @@ describe('dashboard layout', () => {
   it('normalizes every template layout to the full set of widgets', () => {
     for (const template of BUSINESS_TEMPLATES) {
       const layout = normalizeLayout(template.dashboard)
-      expect(layout.kpis).toHaveLength(8)
+      expect(layout.kpis).toHaveLength(9)
       expect(layout.panels).toHaveLength(7)
     }
   })

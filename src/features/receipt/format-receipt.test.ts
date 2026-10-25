@@ -25,6 +25,12 @@ const tx: Transaction = {
   occurredAt: '2026-10-12T01:30:00Z',
   plateNumber: 'B 1234 XYZ',
   paymentMethod: 'cash',
+  subtotal: 55_000,
+  discountId: null,
+  discountName: null,
+  discountType: null,
+  discountValue: null,
+  discountAmount: 0,
   total: 55_000,
   cashReceived: 100_000,
   changeAmount: 45_000,
@@ -33,6 +39,7 @@ const tx: Transaction = {
   voidedAt: null,
   deviceId: 'd',
   receivedAt: null,
+  orderId: null,
   items: [
     {
       id: 'i1',
@@ -98,6 +105,12 @@ describe('formatReceipt', () => {
     const out = text({
       ...tx,
       paymentMethod: 'qris',
+      subtotal: 55_000,
+      discountId: null,
+      discountName: null,
+      discountType: null,
+      discountValue: null,
+      discountAmount: 0,
       cashReceived: null,
       changeAmount: null,
       plateNumber: null,
@@ -136,5 +149,31 @@ describe('text helpers', () => {
 
   it('keeps the left indent', () => {
     expect(twoColumns('  1 x 5.000', '5.000', 20)).toEqual(['  1 x 5.000    5.000'])
+  })
+})
+
+describe('discounted receipts (decision #35)', () => {
+  it('shows subtotal and the discount line above the total', () => {
+    const discounted: Transaction = {
+      ...tx,
+      subtotal: 55_000,
+      discountId: 'd1',
+      discountName: 'Member 10%',
+      discountType: 'percent',
+      discountValue: 10,
+      discountAmount: 5_500,
+      total: 49_500,
+      cashReceived: 50_000,
+      changeAmount: 500,
+    }
+    const text = receiptToText(formatReceipt(discounted, business, 58), 58)
+    expect(text).toMatch(/Subtotal\s+Rp 55\.000/)
+    expect(text).toMatch(/Diskon Member 10%\s+-Rp 5\.500/)
+    expect(text).toMatch(/TOTAL\s+Rp 49\.500/)
+  })
+
+  it('prints no discount lines without a discount', () => {
+    const text = receiptToText(formatReceipt(tx, business, 58), 58)
+    expect(text).not.toMatch(/Diskon|Subtotal/)
   })
 })

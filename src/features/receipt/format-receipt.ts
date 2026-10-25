@@ -119,6 +119,13 @@ export function formatReceipt(
   }
   divider()
 
+  if (transaction.discountAmount > 0) {
+    row('Subtotal', formatRupiah(transaction.subtotal))
+    row(
+      `Diskon ${transaction.discountName ?? ''}`.trim(),
+      `-${formatRupiah(transaction.discountAmount)}`,
+    )
+  }
   row('TOTAL', formatRupiah(transaction.total), { bold: true, large: true })
   row('Bayar', PAYMENT_METHOD_LABEL[transaction.paymentMethod])
   if (transaction.paymentMethod === 'cash' && transaction.cashReceived !== null) {

@@ -8,6 +8,8 @@ export type ExpenseSource = 'drawer' | 'owner'
 export type ExpenseStatus = 'active' | 'void'
 export type ReserveMovementType = 'deposit' | 'withdraw'
 export type ReserveDepositSource = 'cash' | 'capital'
+export type DiscountType = 'percent' | 'amount'
+export type OrderStatus = 'open' | 'paid' | 'cancelled'
 /**
  * How an expense category counts in the profit tiers (decision #24):
  * operating → operating profit; non_operating (loan installments, assets) → net profit;
@@ -63,6 +65,15 @@ export interface Transaction {
   occurredAt: string
   plateNumber: string | null
   paymentMethod: PaymentMethod
+  /** Σ line totals before the discount. */
+  subtotal: number
+  /** Discount preset snapshot (decision #35); all null when no discount. */
+  discountId: string | null
+  discountName: string | null
+  discountType: DiscountType | null
+  discountValue: number | null
+  discountAmount: number
+  /** subtotal − discountAmount */
   total: number
   cashReceived: number | null
   changeAmount: number | null
@@ -72,7 +83,48 @@ export interface Transaction {
   deviceId: string
   /** Set by the server on arrival (decision #17); null while only in the device outbox. */
   receivedAt: string | null
+  /** The open order this sale settles (decision #34). */
+  orderId: string | null
   items: TransactionItem[]
+}
+
+/** Owner-defined discount preset the cashier may apply when active (decision #35). */
+export interface Discount {
+  id: string
+  businessId: string
+  name: string
+  type: DiscountType
+  value: number
+  sortOrder: number
+  isActive: boolean
+}
+
+export interface OrderLine {
+  catalogItemId: string | null
+  name: string
+  price: number
+  qty: number
+}
+
+/** A car checked in and not yet paid (decision #34). Operational only, never income. */
+export interface Order {
+  id: string
+  businessId: string
+  deviceId: string
+  plateNumber: string | null
+  items: OrderLine[]
+  total: number
+  status: OrderStatus
+  openedAt: string
+  deviceUpdatedAt: string
+  transactionId: string | null
+  cancelReason: string | null
+  cancelledAt: string | null
+}
+
+export interface CashierAccount {
+  username: string | null
+  isActive: boolean
 }
 
 export interface ExpenseCategory {
@@ -148,4 +200,9 @@ export const EXPENSE_KIND_HINT: Record<ExpenseKind, string> = {
   operating: 'Biaya menjalankan usaha sehari-hari. Mengurangi profit operasional.',
   non_operating: 'Cicilan utang, pembelian aset, renovasi. Mengurangi profit bersih.',
   drawing: 'Uang diambil owner/keluarga. Tidak mengurangi profit, tetapi mengurangi kas.',
+}
+
+export const DISCOUNT_TYPE_LABEL: Record<DiscountType, string> = {
+  percent: 'Persen',
+  amount: 'Nominal',
 }

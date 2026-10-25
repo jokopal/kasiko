@@ -19,6 +19,8 @@ const KIND_LABEL: Record<OutboxEntry['operation']['kind'], string> = {
   'transaction.void': 'Pembatalan transaksi',
   'expense.create': 'Pengeluaran',
   'expense.void': 'Pembatalan pengeluaran',
+  'order.save': 'Pesanan',
+  'order.cancel': 'Pembatalan pesanan',
 }
 
 function describe(entry: OutboxEntry): string {
@@ -27,6 +29,9 @@ function describe(entry: OutboxEntry): string {
     return `${operation.record.receiptNo} · ${formatRupiah(operation.record.total)}`
   }
   if (operation.kind === 'expense.create') return formatRupiah(operation.record.amount)
+  if (operation.kind === 'order.save') {
+    return `${operation.record.plateNumber ?? 'Tanpa plat'} · ${formatRupiah(operation.record.total)}`
+  }
   return operation.reason
 }
 
