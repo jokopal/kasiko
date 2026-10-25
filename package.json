@@ -17,7 +17,8 @@
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
     "db:test": "node --env-file=.env.bootstrap scripts/db-test.ts",
     "db:types": "supabase gen types typescript --project-id vvpaptrtwjnsstisdlgy --schema public > src/lib/database.types.ts && prettier --write src/lib/database.types.ts",
-    "db:test:local": "supabase test db"
+    "db:test:local": "supabase test db",
+    "test:e2e:live": "playwright test -c playwright.live.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

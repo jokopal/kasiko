@@ -93,6 +93,15 @@ Kunci service/secret **tidak pernah** masuk ke `VITE_*` atau ke repo.
 di `phone`, `tablet`, `desktop` terhadap proyek sungguhan **tanpa menulis data**. Alur yang
 mencatat data (jual, pesanan, offline) butuh usaha uji terpisah — lihat Pertanyaan Terbuka #20.
 
+`npm run test:e2e:live` menjalankan alur nyata (jual + diskon, bayar di akhir, pengeluaran
+laci, offline→online, area owner) terhadap **proyek staging** saja:
+
+1. Buat proyek Supabase staging, terapkan migrasi, deploy kedua Edge Function, buat owner
+   uji dengan `scripts/bootstrap-owner.ts`.
+2. Salin `.env.staging.example` → `.env.staging` (ter-ignore) dan isi.
+3. Setiap jalan, setup global membuat usaha uji baru + akun kasir + preset diskon (kode
+   perangkat tidak pernah dipakai ulang, #16). Tes menolak berjalan bila URL-nya produksi.
+
 ## Database (Supabase)
 
 Database berjalan di **proyek Supabase owner** — tidak perlu Docker (keputusan #33). Rahasia

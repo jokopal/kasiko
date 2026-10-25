@@ -176,7 +176,7 @@ Perangkat kasir (PWA)                     Perangkat owner (browser)
   `npm run check` = typecheck + lint + format + Vitest. `npm run test:e2e` = Playwright di
   `phone`, `tablet`, `desktop`. `npm run db:test` = pgTAP ke database proyek tanpa Docker
   (setiap file di-rollback).
-- **Hosting:** situs statis (Vercel / Netlify / Cloudflare Pages) — *belum dipilih*.
+- **Hosting:** Vercel paket gratis (`vercel.json`: rewrite SPA, `sw.js` tanpa cache). Domain sendiri belum.
 - Satu aplikasi, dua area (`/kasir`, `/owner`); kode owner di-lazy-load agar bundle kasir ringan.
 
 ```
@@ -287,26 +287,26 @@ metode, uang diterima & kembalian, teks penutup. Satu fungsi murni
 
 ## 10. Status (evaluasi 2026-10-25)
 
-Legenda: ✅ selesai & teruji · 🟡 ada di **mode pratinjau** saja (belum memakai database) ·
+Legenda: ✅ selesai & teruji · 🟡 ada tetapi belum teruji penuh / belum live ·
 ⬜ belum ada.
 
 | Area | Status | Catatan |
 |------|--------|---------|
-| Fondasi kode, kualitas, CI lokal | ✅ | 216 tes Vitest, 33 E2E (3 perangkat), lint/format bersih |
-| Database: skema, RLS, RPC, rumus, audit | ✅ | 5 migrasi live di proyek; 95 tes pgTAP hijau di proyek |
+| Fondasi kode, kualitas, CI lokal | ✅ | 210 tes Vitest, 15 E2E asap (3 perangkat, tanpa menulis data), lint/format bersih |
+| Database: skema, RLS, RPC, rumus, audit | ✅ | 6 migrasi live di produksi; 129 tes pgTAP hijau di produksi |
 | Edge Function `manage-cashier`, `bootstrap-owner` | ✅ | ter-deploy & diuji penolakan aksesnya |
 | Akun owner & usaha Saimara di produksi | ✅ | dibuat 2026-10-25 dari template `cuci-mobil` |
 | Sign-up publik mati | ✅ | dimatikan owner di dashboard |
 | Login & peran memakai Supabase Auth | ✅ | owner (email) & kasir (nama pengguna); sesi tersimpan untuk kasir offline |
 | Data aplikasi dari database | ✅ | mode pratinjau **dihapus** (#23); kasir via RPC + outbox, owner via RLS/RPC + TanStack Query |
-| Bayar di akhir (pesanan) & diskon | ✅ | kode + 34 tes pgTAP; **migrasi `0600` menunggu diterapkan ke produksi** |
-| Kasir: POS, bayar, nota (print/WA), riwayat, ringkasan, batal, pengeluaran laci | 🟡 | lengkap di pratinjau; Bluetooth belum diuji printer fisik |
-| Offline: outbox, sync, registrasi perangkat, PWA | 🟡 | teruji offline→online dengan transport tiruan |
+| Bayar di akhir (pesanan) & diskon | ✅ | migrasi `0600` live di produksi (2026-10-25) |
+| Kasir: POS, bayar, nota (print/WA), riwayat, ringkasan, batal, pengeluaran laci | 🟡 | tersambung ke RPC; alur tulis belum diuji E2E terhadap database (menunggu staging, #20); Bluetooth belum diuji printer fisik |
+| Offline: outbox, sync, registrasi perangkat, PWA | 🟡 | transport & registrasi ke RPC; offline→online teruji dengan transport tiruan, E2E nyata siap di `e2e-live/` (menunggu staging) |
 | Owner Monitor: dashboard, rekap bulanan, transaksi + ekspor | ✅ | angka dari fungsi SQL; ekspor Excel/CSV transaksi |
 | Owner Manajemen: pengeluaran, cadangan, impor Excel | ✅ | ekspor pengeluaran; rumus kas bebas masih menunggu konfirmasi (#9) |
 | Owner Admin: katalog, kategori, diskon, pengaturan, template, tambah usaha, akun kasir | ✅ | akun kasir via `manage-cashier`; upload logo ke Storage |
 | Storage logo | ✅ | bucket `logos` + policy (dalam migrasi `0600`) |
-| Hosting & domain | ⬜ | belum dipilih / belum deploy |
+| Hosting & domain | 🟡 | Vercel (paket gratis) `kasiko-snowy.vercel.app` — proyek Vercel terhubung ke **fork** `loypandia12-cpu/kasiko` yang masih di commit lama; domain sendiri belum |
 | Riwayat Excel 2025–2026 di produksi | ⬜ | alat impor siap, menunggu R1 |
 | Operasional produksi (backup, monitoring, SMTP) | ⬜ | Pertanyaan #14 |
 
@@ -334,6 +334,9 @@ Saimara (#7); bayar di awal/akhir (#4); daftar layanan & harga (#5).
 
 - Belum ada proyek staging — `npm run db:test` berjalan di database produksi (aman karena
   di-rollback, tetapi tetap produksi). Pertimbangkan proyek staging (Pertanyaan #14).
+- Supabase **paket gratis**: proyek dijeda setelah 7 hari tanpa aktivitas (kasir harian
+  mencegahnya) dan tidak ada backup harian yang bisa diunduh — backup manual (`pg_dump`)
+  perlu dijadwalkan (Pertanyaan #14).
 - Rumus keuangan ada di dua tempat (TS & SQL) — wajib diuji dengan kasus yang sama.
 - Kunci JWT lama (`anon`, `service_role`) masih aktif di proyek dan tersimpan sebagai teks
   biasa di komputer owner. Setelah R1 memakai kunci baru, pertimbangkan menonaktifkan kunci
@@ -358,7 +361,7 @@ Yang **masih terbuka** (tanyakan sebelum fitur terkait dikerjakan):
 | 11 | Dana cadangan terpisah per usaha? (asumsi: ya) | R5 |
 | 12 | Modal awal laci & tutup kasir (hitung fisik, setoran ke owner, selisih)? | Usulan R4/R5 |
 | 14 | Lingkungan produksi: staging terpisah, backup (paket Supabase), SMTP untuk reset kata sandi owner, pemantauan error. | R6 |
-| 18 | Hosting: Vercel, Netlify, atau Cloudflare Pages? Domain sendiri? | R3 |
+| 18 | Hosting sudah Vercel (gratis). Sisa: domain sendiri? Hubungkan Vercel ke repo utama atau sinkronkan fork. | R3 |
 | 19 | Nonaktifkan kunci JWT lama setelah aplikasi memakai kunci baru? | setelah R1 |
 | 20 | E2E yang menulis data: proyek **staging** terpisah (disarankan) atau **usaha uji tersembunyi** di produksi? Kode perangkat tidak pernah dipakai ulang (#16), jadi E2E tidak bisa terus memakai satu usaha. | E2E penuh |
 
