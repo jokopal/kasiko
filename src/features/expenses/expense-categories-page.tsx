@@ -2,6 +2,7 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   MonitorSmartphoneIcon,
+  PencilLineIcon,
   PencilIcon,
   PlusIcon,
 } from 'lucide-react'
@@ -43,7 +44,13 @@ import {
 import { cn } from '@/lib/utils'
 import { KindDot } from './kind'
 
-type Draft = { id?: string; name: string; kind: ExpenseKind; allowDrawer: boolean }
+type Draft = {
+  id?: string
+  name: string
+  kind: ExpenseKind
+  allowDrawer: boolean
+  requiresNote: boolean
+}
 
 export function ExpenseCategoriesPage() {
   const { business, expenseCategories } = useOwnerData()
@@ -54,7 +61,11 @@ export function ExpenseCategoriesPage() {
       title="Kategori Pengeluaran"
       description="Jenis kategori menentukan cara pengeluaran dihitung di profit. Kategori yang sudah dipakai dinonaktifkan, bukan dihapus."
       actions={
-        <Button onClick={() => setDraft({ name: '', kind: 'operating', allowDrawer: true })}>
+        <Button
+          onClick={() =>
+            setDraft({ name: '', kind: 'operating', allowDrawer: true, requiresNote: false })
+          }
+        >
           <PlusIcon />
           Tambah kategori
         </Button>
@@ -98,6 +109,7 @@ export function ExpenseCategoriesPage() {
                           name: row.name,
                           kind: row.kind,
                           allowDrawer: row.allowDrawer,
+                          requiresNote: row.requiresNote,
                         })
                       }
                     />
@@ -178,6 +190,12 @@ function CategoryRow({
         >
           {row.name}
         </span>
+        {row.requiresNote && (
+          <Badge variant="outline" className="gap-1">
+            <PencilLineIcon className="size-3" aria-hidden />
+            Wajib keterangan
+          </Badge>
+        )}
         {row.allowDrawer && (
           <Badge variant="outline" className="gap-1">
             <MonitorSmartphoneIcon className="size-3" aria-hidden />
@@ -242,6 +260,7 @@ function CategoryForm({
   const [name, setName] = useState(draft.name)
   const [kind, setKind] = useState(draft.kind)
   const [allowDrawer, setAllowDrawer] = useState(draft.allowDrawer)
+  const [requiresNote, setRequiresNote] = useState(draft.requiresNote)
   const [error, setError] = useState<string | null>(null)
 
   async function submit(event: FormEvent) {
@@ -252,6 +271,7 @@ function CategoryForm({
       name,
       kind,
       allowDrawer,
+      requiresNote,
       siblings,
     })
     if (!result.ok) {
@@ -302,6 +322,16 @@ function CategoryForm({
           <FieldContent>
             <FieldLabel htmlFor="allow-drawer">Tampil di layar kasir</FieldLabel>
             <FieldDescription>Kasir boleh mencatat kategori ini dari uang laci.</FieldDescription>
+          </FieldContent>
+        </Field>
+        <Field orientation="horizontal">
+          <Switch id="requires-note" checked={requiresNote} onCheckedChange={setRequiresNote} />
+          <FieldContent>
+            <FieldLabel htmlFor="requires-note">Wajib keterangan</FieldLabel>
+            <FieldDescription>
+              Untuk kategori serba-ada seperti &quot;Lainnya&quot;: setiap pengeluaran harus ditulis
+              untuk apa, lalu bisa Anda pindahkan ke kategori yang tepat di halaman Pengeluaran.
+            </FieldDescription>
           </FieldContent>
         </Field>
         {draft.id && kind !== draft.kind && (

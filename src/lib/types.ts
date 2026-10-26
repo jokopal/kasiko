@@ -27,7 +27,12 @@ export interface Business {
   primaryColor: string
   receiptPrefix: string
   timezone: string
+  /** Kas bebas when the business started using Kasiko; owner only (decision #19). */
   openingCash: number
+  /** Modal laci: the change float put in the drawer every morning (decision #37). */
+  drawerFloat: number
+  /** Uang dingin: the reserve's opening balance, kept out of free cash; owner only. */
+  openingReserve: number
   isActive: boolean
 }
 
@@ -136,6 +141,8 @@ export interface ExpenseCategory {
   kind: ExpenseKind
   /** Shown on the cashier screen, i.e. may be paid from the drawer (decision #26). */
   allowDrawer: boolean
+  /** The catch-all "Lainnya": every expense needs a note of ≥ 3 letters (decision #36). */
+  requiresNote: boolean
 }
 
 export interface Expense {

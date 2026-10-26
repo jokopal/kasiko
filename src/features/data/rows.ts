@@ -37,6 +37,8 @@ export interface BusinessRow {
   timezone: string
   /** Absent in the cashier's `business_branding` view (decision #19). */
   opening_cash?: number
+  opening_reserve?: number
+  drawer_float?: number
   is_active: boolean
 }
 
@@ -52,6 +54,8 @@ export function toBusiness(row: BusinessRow, logoUrl: string | null = null): Bus
     receiptPrefix: row.receipt_prefix,
     timezone: row.timezone,
     openingCash: row.opening_cash ?? 0,
+    drawerFloat: row.drawer_float ?? 0,
+    openingReserve: row.opening_reserve ?? 0,
     isActive: row.is_active,
   }
 }
@@ -86,12 +90,14 @@ export const toCatalogItem = (row: CatalogItemRow): CatalogItem => ({
 export interface ExpenseCategoryRow extends CatalogCategoryRow {
   kind: ExpenseKind
   allow_drawer: boolean
+  requires_note?: boolean
 }
 
 export const toExpenseCategory = (row: ExpenseCategoryRow): ExpenseCategory => ({
   ...toCatalogCategory(row),
   kind: row.kind,
   allowDrawer: row.allow_drawer,
+  requiresNote: row.requires_note ?? false,
 })
 
 export interface DiscountRow extends CatalogCategoryRow {

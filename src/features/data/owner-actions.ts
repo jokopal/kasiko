@@ -69,9 +69,6 @@ export function saveBusiness(business: Business, logoPath?: string | null): Prom
   if (!isValidReceiptPrefix(business.receiptPrefix)) {
     return Promise.resolve(fail('Prefix nota 2–6 huruf kapital/angka'))
   }
-  if (!Number.isSafeInteger(business.openingCash) || business.openingCash < 0) {
-    return Promise.resolve(fail('Saldo awal kas tidak valid'))
-  }
   return run(business.id, () =>
     db()
       .from('businesses')
@@ -83,10 +80,47 @@ export function saveBusiness(business: Business, logoPath?: string | null): Prom
         primary_color: business.primaryColor,
         receipt_prefix: business.receiptPrefix,
         timezone: business.timezone,
-        opening_cash: business.openingCash,
         ...(logoPath !== undefined && { logo_path: logoPath }),
       })
       .eq('id', business.id),
+  )
+}
+
+export interface OpeningBalances {
+  /** Saldo awal kas: usable cash when the business started on Kasiko (free cash). */
+  openingCash: number
+  /** Modal laci: the change float the drawer starts with every day. */
+  drawerFloat: number
+  /** Uang dingin: the reserve's opening balance, outside free cash. */
+  openingReserve: number
+}
+
+const BALANCE_LABEL: Record<keyof OpeningBalances, string> = {
+  openingCash: 'Saldo awal kas',
+  drawerFloat: 'Modal laci',
+  openingReserve: 'Uang dingin',
+}
+
+/** Opening balances (decision #37); every change lands in the audit log. */
+export function saveOpeningBalances(
+  businessId: string,
+  balances: OpeningBalances,
+): Promise<Result> {
+  for (const key of Object.keys(BALANCE_LABEL) as (keyof OpeningBalances)[]) {
+    const value = balances[key]
+    if (!Number.isSafeInteger(value) || value < 0) {
+      return Promise.resolve(fail(`${BALANCE_LABEL[key]} tidak valid`))
+    }
+  }
+  return run(businessId, () =>
+    db()
+      .from('businesses')
+      .update({
+        opening_cash: balances.openingCash,
+        drawer_float: balances.drawerFloat,
+        opening_reserve: balances.openingReserve,
+      })
+      .eq('id', businessId),
   )
 }
 
@@ -250,6 +284,8 @@ export interface ExpenseCategoryInput {
   name: string
   kind: ExpenseKind
   allowDrawer: boolean
+  /** "Lainnya": every expense needs a note (decision #36). */
+  requiresNote: boolean
   siblings: readonly Ordered[]
 }
 
@@ -258,7 +294,12 @@ export function saveExpenseCategory(input: ExpenseCategoryInput): Promise<Result
   if (name === '') return Promise.resolve(fail('Nama kategori wajib diisi'))
   if (!EXPENSE_KINDS.includes(input.kind))
     return Promise.resolve(fail('Jenis kategori tidak valid'))
-  const values = { name, kind: input.kind, allow_drawer: input.allowDrawer }
+  const values = {
+    name,
+    kind: input.kind,
+    allow_drawer: input.allowDrawer,
+    requires_note: input.requiresNote,
+  }
   return run(input.businessId, () =>
     input.id
       ? db().from('expense_categories').update(values).eq('id', input.id)
@@ -354,6 +395,14 @@ export function createOwnerExpense(input: {
         },
       }),
     () => ({ amount: input.amount }),
+  )
+}
+
+/** Moves an expense to a proper category, e.g. out of "Lainnya" (decision #36). */
+export function recategorizeExpense(businessId: string, id: string, categoryId: string) {
+  if (!categoryId) return Promise.resolve(fail('Pilih kategori tujuan'))
+  return run(businessId, () =>
+    callRpc('recategorize_expense', { p_id: id, p_category_id: categoryId }),
   )
 }
 

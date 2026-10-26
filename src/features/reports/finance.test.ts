@@ -113,6 +113,10 @@ describe('drawerExpected', () => {
   it('is cash sales minus drawer expenses; owner expenses do not touch the drawer', () => {
     expect(drawerExpected(transactions, expenses, oct10)).toBe(25_000)
   })
+
+  it('adds the morning float (decision #37; same case as 05_other_expenses pgTAP)', () => {
+    expect(drawerExpected(transactions, expenses, oct10, 300_000)).toBe(325_000)
+  })
 })
 
 describe('reserve and free cash', () => {
@@ -141,6 +145,16 @@ describe('reserve and free cash', () => {
   it('never lets reserve movements change profit', () => {
     const totals = periodTotals(transactions, expenses, oct10)
     expect(totals.profit).toBe(totals.income - totals.expense)
+  })
+
+  it('starts the reserve from uang dingin, which never counts as free cash', () => {
+    // Same case as 05_other_expenses_opening_balances.test.sql
+    const cold = [
+      mv({ type: 'deposit', amount: 200_000, source: 'cash' }),
+      mv({ type: 'withdraw', amount: 1_000_000, reason: 'Renovasi atap' }),
+    ]
+    expect(reserveBalance(cold, undefined, 5_000_000)).toBe(4_200_000)
+    expect(reserveBalance([], undefined, 5_000_000)).toBe(5_000_000)
   })
 
   it('respects the cut-off', () => {

@@ -15,7 +15,7 @@ export function SummaryPage() {
   const transactions = kasir.transactions.map((r) => r.row)
   const drawerExpenses = kasir.expenses.map((r) => r.row)
   const totals = periodTotals(transactions, drawerExpenses, today)
-  const drawer = drawerExpected(transactions, drawerExpenses, today)
+  const drawer = drawerExpected(transactions, drawerExpenses, today, business.drawerFloat)
   const voidCount = transactions.filter((t) => t.status === 'void').length
 
   const methods = [
@@ -36,9 +36,16 @@ export function SummaryPage() {
           <p className="text-sm opacity-85">Uang laci seharusnya</p>
           <p className="text-4xl font-bold tracking-tight tabular-nums">{formatRupiah(drawer)}</p>
           <p className="text-xs opacity-85">
-            Tunai {formatRupiah(totals.incomeByMethod.cash)} − pengeluaran laci{' '}
+            {business.drawerFloat > 0 && <>Modal laci {formatRupiah(business.drawerFloat)} + </>}
+            tunai {formatRupiah(totals.incomeByMethod.cash)} − pengeluaran laci{' '}
             {formatRupiah(totals.drawerExpense)}
           </p>
+          {business.drawerFloat > 0 && (
+            <p className="text-xs opacity-85">
+              Setelah tutup: sisakan {formatRupiah(business.drawerFloat)} di laci, setor{' '}
+              {formatRupiah(Math.max(0, drawer - business.drawerFloat))} ke owner.
+            </p>
+          )}
         </CardContent>
       </Card>
 

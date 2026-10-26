@@ -133,22 +133,34 @@ export function periodTotals(
   }
 }
 
-/** Expected cash in the drawer: cash sales minus drawer expenses within `range`. */
+/**
+ * Uang laci seharusnya: the morning float (decision #37) + cash sales − drawer expenses
+ * within `range`. Owner expenses never touch the drawer.
+ */
 export function drawerExpected(
   transactions: readonly Transaction[],
   expenses: readonly Expense[],
   range: DateRange,
+  drawerFloat = 0,
 ): number {
   const totals = periodTotals(transactions, expenses, range)
-  return totals.incomeByMethod.cash - totals.drawerExpense
+  return drawerFloat + totals.incomeByMethod.cash - totals.drawerExpense
 }
 
 const before = (iso: string, until?: Date) => !until || at(iso).getTime() < until.getTime()
 
-/** Σ deposit − Σ withdraw, all time (optionally only movements before `until`). */
-export function reserveBalance(movements: readonly ReserveMovement[], until?: Date): number {
+/**
+ * Opening reserve ("uang dingin", decision #37) + Σ deposit − Σ withdraw, all time
+ * (optionally only movements before `until`).
+ */
+export function reserveBalance(
+  movements: readonly ReserveMovement[],
+  until?: Date,
+  openingReserve = 0,
+): number {
   const relevant = movements.filter((m) => before(m.occurredAt, until))
   return (
+    openingReserve +
     sumRupiah(relevant.filter((m) => m.type === 'deposit').map((m) => m.amount)) -
     sumRupiah(relevant.filter((m) => m.type === 'withdraw').map((m) => m.amount))
   )

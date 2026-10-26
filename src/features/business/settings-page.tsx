@@ -2,7 +2,6 @@ import { CheckIcon, ImageUpIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-re
 import { useRef, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { BusinessLogo } from '@/components/business-logo'
-import { RupiahInput } from '@/components/rupiah-input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -24,6 +23,7 @@ import { isValidReceiptPrefix } from '@/features/receipt/receipt-number'
 import { BUSINESS_TIMEZONES, yymmdd } from '@/lib/datetime'
 import type { Business, Transaction } from '@/lib/types'
 import { brandContrastChecks, isHexColor, readableForeground } from './brand'
+import { OpeningBalancesCard } from './opening-balances'
 import { TemplateCard } from './template-card'
 
 export function SettingsPage() {
@@ -69,6 +69,7 @@ function SettingsForm({ business, templateId }: { business: Business; templateId
 
   return (
     <OwnerPage title="Pengaturan Usaha" description="Identitas usaha di layar kasir dan nota.">
+      <OpeningBalancesCard business={business} />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <form onSubmit={(event) => void submit(event)}>
           <Card>
@@ -177,7 +178,7 @@ function SettingsForm({ business, templateId }: { business: Business; templateId
                     onChange={(e) => set('receiptFooter', e.target.value)}
                   />
                 </Field>
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <Field>
                     <FieldLabel htmlFor="prefix">Prefix nota</FieldLabel>
                     <Input
@@ -202,14 +203,6 @@ function SettingsForm({ business, templateId }: { business: Business; templateId
                         ))}
                       </SelectContent>
                     </Select>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="opening">Saldo awal kas</FieldLabel>
-                    <RupiahInput
-                      id="opening"
-                      value={draft.openingCash}
-                      onValueChange={(v) => set('openingCash', v ?? 0)}
-                    />
                   </Field>
                 </div>
                 <FieldDescription>

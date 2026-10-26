@@ -10,6 +10,8 @@ export interface ExpenseCategoryTemplate {
   name: string
   kind: ExpenseKind
   allowDrawer: boolean
+  /** The catch-all "Lainnya": each expense needs a note (decision #36). */
+  requiresNote?: boolean
   /** Spreadsheet labels (normalized) that mean exactly this category. */
   aliases?: string[]
   /** Fallback: a normalized label containing one of these maps here. */
@@ -54,6 +56,13 @@ const op = (
   aliases: string[] = [],
   keywords: string[] = [],
 ): ExpenseCategoryTemplate => ({ name, kind: 'operating', allowDrawer, aliases, keywords })
+
+/** "Lainnya" (decision #36): open to the drawer, a note is required, sorted into proper
+ * categories by the owner later. */
+const other = (aliases: string[]): ExpenseCategoryTemplate => ({
+  ...op('Lainnya', true, aliases),
+  requiresNote: true,
+})
 
 // Built from the audit of a car-wash daily cash-flow workbook (2026-10-19): ~75 free-text
 // labels folded into categories an owner can actually compare month to month. Labels with
@@ -167,7 +176,7 @@ const CAR_WASH: BusinessTemplate = {
     op('Ganti Rugi Pelanggan', true, ['ganti rugi'], ['ganti rugi', 'rusak']),
     op('Software & Langganan', false, ['olsera', 'aplikasi', 'langganan'], ['langganan']),
     op('Pajak & Retribusi', false, ['pajak', 'retribusi'], ['pajak', 'retribusi']),
-    op('Lain-lain', true, ['dana lain-lain', 'lain-lain', 'lainnya', 'belanja', 'obat']),
+    other(['dana lain-lain', 'lain-lain', 'lainnya', 'belanja', 'obat']),
     {
       name: 'Cicilan & Utang',
       kind: 'non_operating',
@@ -222,7 +231,7 @@ const GENERAL: BusinessTemplate = {
     op('Operasional', true, ['operasional'], ['listrik', 'air', 'wifi', 'bbm']),
     op('Gaji', false, ['gaji'], ['gaji', 'upah']),
     op('Sewa', false, ['sewa'], ['sewa']),
-    op('Lain-lain', true, ['lain-lain', 'lainnya']),
+    other(['lain-lain', 'lainnya']),
     {
       name: 'Cicilan & Aset',
       kind: 'non_operating',

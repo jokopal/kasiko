@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDownToLineIcon, ArrowUpFromLineIcon } from 'lucide-react'
+import { ArrowDownToLineIcon, ArrowUpFromLineIcon, SnowflakeIcon } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { RupiahInput } from '@/components/rupiah-input'
@@ -17,6 +17,7 @@ import {
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { OpeningBalancesDialog } from '@/features/business/opening-balances'
 import { fetchFreeCash, fetchReserveBalance, fetchReserveMovements } from '@/features/data/owner'
 import { addReserveMovement } from '@/features/data/owner-actions'
 import { useOwnerData } from '@/features/data/owner-data'
@@ -29,6 +30,7 @@ import type { ReserveDepositSource, ReserveMovementType } from '@/lib/types'
 export function ReservePage() {
   const { business } = useOwnerData()
   const [dialog, setDialog] = useState<ReserveMovementType | null>(null)
+  const [balancesOpen, setBalancesOpen] = useState(false)
   const query = useQuery({
     queryKey: keys.list(business.id, 'reserve'),
     queryFn: async () => {
@@ -67,6 +69,9 @@ export function ReservePage() {
             <p className="text-sm opacity-85">Saldo cadangan</p>
             <p className="text-3xl font-bold tracking-tight tabular-nums">
               {formatRupiah(balance)}
+            </p>
+            <p className="text-xs opacity-85">
+              Uang dingin {formatRupiah(business.openingReserve)} + setor − tarik
             </p>
           </CardContent>
         </Card>
@@ -126,13 +131,36 @@ export function ReservePage() {
                 </p>
               </li>
             ))}
-            {history.length === 0 && (
-              <li className="py-8 text-center text-sm text-muted-foreground">Belum ada riwayat</li>
-            )}
+            {/* Decision #37: the opening balance closes the history, editable in place. */}
+            <li className="flex items-start gap-3 py-3">
+              <span
+                className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted"
+                aria-hidden
+              >
+                <SnowflakeIcon className="size-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">Saldo awal (uang dingin)</p>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs"
+                  onClick={() => setBalancesOpen(true)}
+                >
+                  {business.openingReserve > 0 ? 'Ubah' : 'Atur uang dingin'}
+                </Button>
+              </div>
+              <p className="font-semibold tabular-nums">{formatRupiah(business.openingReserve)}</p>
+            </li>
           </ul>
         </CardContent>
       </Card>
 
+      <OpeningBalancesDialog
+        business={business}
+        open={balancesOpen}
+        onOpenChange={setBalancesOpen}
+      />
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent className="sm:max-w-md">
           {dialog && (

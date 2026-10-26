@@ -1,9 +1,12 @@
 import {
   ArrowDownRightIcon,
+  ArrowRightIcon,
   ArrowUpRightIcon,
   MinusIcon,
+  PencilLineIcon,
   SlidersHorizontalIcon,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Bar, BarChart, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts'
@@ -24,6 +27,7 @@ import {
   type KpiId,
   type PanelId,
 } from '@/features/business/config'
+import { OpeningBalancesCard } from '@/features/business/opening-balances'
 import { KindDot } from '@/features/expenses/kind'
 import { KIND_COLOR } from '@/features/expenses/kind-colors'
 import { PageLoading } from '@/components/page-loading'
@@ -146,7 +150,13 @@ export function DashboardPage() {
   }
   const stats = { ...query.data, kindOf }
   const { current, previous } = stats
-  const categoryName = (id: string) => expenseCategories.find((c) => c.id === id)?.name ?? 'Lainnya'
+  const categoryName = (id: string) =>
+    expenseCategories.find((c) => c.id === id)?.name ?? 'Tanpa kategori'
+  // "Lainnya" spending to sort into proper categories, so months stay comparable (#36).
+  const otherIds = new Set(expenseCategories.filter((c) => c.requiresNote).map((c) => c.id))
+  const otherAmount = stats.expenseMix
+    .filter((row) => otherIds.has(row.categoryId))
+    .reduce((sum, row) => sum + row.amount, 0)
 
   const kpiValue: Record<KpiId, { value: number; previous?: number; higherIsWorse?: boolean }> = {
     income: { value: current.income, previous: previous.income },
@@ -247,6 +257,28 @@ export function DashboardPage() {
               />
             )
           })}
+        </div>
+      )}
+
+      <OpeningBalancesCard business={business} />
+
+      {otherAmount > 0 && (
+        <div className="flex flex-col gap-2 rounded-lg border bg-muted/40 p-3 text-sm sm:flex-row sm:items-center">
+          <PencilLineIcon
+            className="hidden size-4 shrink-0 text-muted-foreground sm:block"
+            aria-hidden
+          />
+          <p className="min-w-0 flex-1">
+            <span className="font-medium tabular-nums">{formatRupiah(otherAmount)}</span> dicatat
+            sebagai &quot;Lainnya&quot; di periode ini. Pindahkan ke kategori yang tepat agar rekap
+            antarbulan bisa dibandingkan.
+          </p>
+          <Button asChild variant="outline" size="sm" className="shrink-0">
+            <Link to="/owner/pengeluaran?lainnya=1">
+              Pilah sekarang
+              <ArrowRightIcon />
+            </Link>
+          </Button>
         </div>
       )}
 

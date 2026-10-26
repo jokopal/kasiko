@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react'
+import { PencilLineIcon } from 'lucide-react'
+import { useRef, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { RupiahInput } from '@/components/rupiah-input'
 import { Button } from '@/components/ui/button'
@@ -40,6 +41,7 @@ import {
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { KindDot } from './kind'
+import { NOTE_MAX, noteProblem } from './rules'
 
 interface ExpenseDialogProps {
   open: boolean
@@ -82,16 +84,33 @@ function ExpenseForm({
 }: ExpenseDialogProps & { onDone: () => void }) {
   // The cashier only sees what the owner allows for the drawer (decision #26).
   const active = categories.filter((c) => (source === 'drawer' ? isDrawerCategory(c) : c.isActive))
+  // "Lainnya" (decision #36) sits below the grid, always in view, never scrolled away.
+  const regular = active.filter((c) => !c.requiresNote)
+  const others = active.filter((c) => c.requiresNote)
   const [amount, setAmount] = useState<number | null>(null)
   const [categoryId, setCategoryId] = useState('')
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const selectedKind = active.find((c) => c.id === categoryId)?.kind
+  const noteRef = useRef<HTMLInputElement>(null)
+  const selected = active.find((c) => c.id === categoryId)
+  const noteRequired = selected?.requiresNote ?? false
+
+  function pick(category: ExpenseCategory) {
+    setCategoryId(category.id)
+    setError(null)
+    if (category.requiresNote) noteRef.current?.focus()
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (saving) return
+    const problem = noteProblem(selected, note)
+    if (problem) {
+      setError(problem)
+      noteRef.current?.focus()
+      return
+    }
     setSaving(true)
     const input = { businessId, categoryId, amount: amount ?? 0, note }
     // Cashier: outbox, works offline. Owner: straight to the server (online-only).
@@ -126,27 +145,54 @@ function ExpenseForm({
         {source === 'drawer' ? (
           <Field>
             <FieldTitle id="expense-category-label">Kategori</FieldTitle>
-            <div
-              role="radiogroup"
-              aria-labelledby="expense-category-label"
-              className="grid max-h-56 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3"
-            >
-              {active.map((category) => (
+            <div role="radiogroup" aria-labelledby="expense-category-label" className="grid gap-2">
+              <div className="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3">
+                {regular.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={categoryId === category.id}
+                    onClick={() => pick(category)}
+                    className={cn(
+                      'min-h-11 rounded-lg border px-2 py-2 text-left text-sm leading-tight font-medium transition-colors',
+                      'focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
+                      categoryId === category.id
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'hover:bg-muted',
+                    )}
+                  >
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+              {others.map((category) => (
                 <button
                   key={category.id}
                   type="button"
                   role="radio"
                   aria-checked={categoryId === category.id}
-                  onClick={() => setCategoryId(category.id)}
+                  onClick={() => pick(category)}
                   className={cn(
-                    'min-h-11 rounded-lg border px-2 py-2 text-left text-sm leading-tight font-medium transition-colors',
+                    'flex min-h-12 items-center gap-3 rounded-lg border border-dashed px-3 py-2 text-left transition-colors',
                     'focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
                     categoryId === category.id
-                      ? 'border-primary bg-primary text-primary-foreground'
+                      ? 'border-solid border-primary bg-primary text-primary-foreground'
                       : 'hover:bg-muted',
                   )}
                 >
-                  {category.name}
+                  <PencilLineIcon className="size-5 shrink-0" aria-hidden />
+                  <span className="grid leading-tight">
+                    <span className="text-sm font-medium">{category.name}</span>
+                    <span
+                      className={cn(
+                        'text-xs',
+                        categoryId === category.id ? 'opacity-85' : 'text-muted-foreground',
+                      )}
+                    >
+                      Tidak ada di daftar? Tulis keterangannya sendiri
+                    </span>
+                  </span>
                 </button>
               ))}
             </div>
@@ -171,6 +217,11 @@ function ExpenseForm({
                       {group.map((category) => (
                         <SelectItem key={category.id} value={category.id}>
                           {category.name}
+                          {category.requiresNote && (
+                            <span className="text-xs text-muted-foreground">
+                              · wajib keterangan
+                            </span>
+                          )}
                         </SelectItem>
                       ))}
                     </SelectGroup>
@@ -178,20 +229,33 @@ function ExpenseForm({
                 })}
               </SelectContent>
             </Select>
-            {selectedKind === 'drawing' && (
+            {selected?.kind === 'drawing' && (
               <FieldDescription>Prive tidak mengurangi profit, hanya kas.</FieldDescription>
             )}
           </Field>
         )}
-        <Field>
-          <FieldLabel htmlFor="expense-note">Catatan</FieldLabel>
+        <Field data-invalid={Boolean(error) && noteRequired}>
+          <FieldLabel htmlFor="expense-note">
+            {noteRequired ? 'Keterangan (wajib)' : 'Catatan (opsional)'}
+          </FieldLabel>
           <Input
+            ref={noteRef}
             id="expense-note"
             value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Contoh: beli sabun 5 liter"
+            onChange={(event) => {
+              setNote(event.target.value)
+              setError(null)
+            }}
+            placeholder={noteRequired ? 'Contoh: beli lampu teras' : 'Contoh: beli sabun 5 liter'}
+            maxLength={NOTE_MAX}
+            aria-invalid={Boolean(error) && noteRequired}
             className="h-11"
           />
+          {noteRequired && (
+            <FieldDescription>
+              Tulis untuk apa uangnya dipakai. Owner bisa memindahkannya ke kategori yang tepat.
+            </FieldDescription>
+          )}
         </Field>
         {error && <FieldError>{error}</FieldError>}
       </FieldGroup>

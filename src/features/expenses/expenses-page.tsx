@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { DownloadIcon, PlusIcon } from 'lucide-react'
+import { DownloadIcon, PencilLineIcon, PlusIcon } from 'lucide-react'
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { VoidDialog } from '@/components/void-dialog'
 import { Badge } from '@/components/ui/badge'
@@ -44,6 +45,7 @@ import {
 import { cn } from '@/lib/utils'
 import { ExpenseDialog } from './expense-dialog'
 import { KindDot } from './kind'
+import { RecategorizeDialog } from './recategorize-dialog'
 
 export function ExpensesPage() {
   const { business, expenseCategories } = useOwnerData()
@@ -56,7 +58,14 @@ export function ExpensesPage() {
   const expenses = query.data ?? []
   const [source, setSource] = useState('all')
   const [status, setStatus] = useState('active')
-  const [categoryId, setCategoryId] = useState('all')
+  // "Lainnya" (decision #36): the dashboard links here with ?lainnya=1 to sort it out.
+  const otherIds = new Set(expenseCategories.filter((c) => c.requiresNote).map((c) => c.id))
+  const [params] = useSearchParams()
+  const [categoryId, setCategoryId] = useState(() => {
+    const other = expenseCategories.find((c) => c.requiresNote)
+    return params.get('lainnya') === '1' && other ? other.id : 'all'
+  })
+  const [moving, setMoving] = useState<Expense | null>(null)
   const [kind, setKind] = useState('all')
   const [addOpen, setAddOpen] = useState(false)
   const [target, setTarget] = useState<Expense | null>(null)
@@ -71,6 +80,7 @@ export function ExpensesPage() {
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
   const activeRows = rows.filter((e) => e.status === 'active')
   const activeTotal = sumRupiah(activeRows.map((e) => e.amount))
+  const toSort = expenses.filter((e) => e.status === 'active' && otherIds.has(e.categoryId))
   const totalOf = (k: ExpenseKind) =>
     sumRupiah(activeRows.filter((e) => kindOf(e.categoryId) === k).map((e) => e.amount))
 
@@ -167,6 +177,32 @@ export function ExpensesPage() {
         ))}
       </div>
 
+      {toSort.length > 0 && !otherIds.has(categoryId) && (
+        <div className="flex flex-col gap-2 rounded-lg border bg-muted/40 p-3 text-sm sm:flex-row sm:items-center">
+          <PencilLineIcon
+            className="hidden size-4 shrink-0 text-muted-foreground sm:block"
+            aria-hidden
+          />
+          <p className="min-w-0 flex-1">
+            <span className="font-medium">{toSort.length} pengeluaran &quot;Lainnya&quot;</span> (
+            {formatRupiah(sumRupiah(toSort.map((e) => e.amount)))}) bisa dipindahkan ke kategori
+            yang tepat.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              const first = toSort[0]
+              if (first) setCategoryId(first.categoryId)
+              setStatus('active')
+            }}
+          >
+            Tampilkan
+          </Button>
+        </div>
+      )}
+
       {query.isPending && <PageLoading />}
       {query.error && (
         <p className="text-sm text-destructive">Pengeluaran gagal dimuat: {query.error.message}</p>
@@ -181,7 +217,7 @@ export function ExpensesPage() {
               <TableHead className="hidden sm:table-cell">Catatan</TableHead>
               <TableHead className="hidden md:table-cell">Sumber</TableHead>
               <TableHead className="text-right">Nominal</TableHead>
-              <TableHead className="w-24" />
+              <TableHead className="w-32" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -198,6 +234,9 @@ export function ExpensesPage() {
                   <span className="block text-xs text-muted-foreground md:hidden">
                     {EXPENSE_SOURCE_LABEL[e.source]}
                   </span>
+                  {e.note && (
+                    <span className="block max-w-48 truncate text-xs sm:hidden">{e.note}</span>
+                  )}
                 </TableCell>
                 <TableCell className="hidden max-w-64 truncate sm:table-cell">
                   {e.note || '—'}
@@ -220,14 +259,24 @@ export function ExpensesPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   {e.status === 'active' ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive"
-                      onClick={() => setTarget(e)}
-                    >
-                      Batalkan
-                    </Button>
+                    <div className="flex flex-col items-end gap-1 lg:flex-row lg:justify-end">
+                      <Button
+                        variant={otherIds.has(e.categoryId) ? 'outline' : 'ghost'}
+                        size="sm"
+                        onClick={() => setMoving(e)}
+                        aria-label={`Pindah kategori ${formatRupiah(e.amount)}`}
+                      >
+                        {otherIds.has(e.categoryId) ? 'Pilah' : 'Pindah'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive"
+                        onClick={() => setTarget(e)}
+                      >
+                        Batalkan
+                      </Button>
+                    </div>
                   ) : (
                     <Badge variant="destructive">Batal</Badge>
                   )}
@@ -251,6 +300,12 @@ export function ExpensesPage() {
         businessId={business.id}
         categories={expenseCategories}
         source="owner"
+      />
+      <RecategorizeDialog
+        expense={moving}
+        categories={expenseCategories}
+        timeZone={tz}
+        onClose={() => setMoving(null)}
       />
       <VoidDialog
         open={target !== null}

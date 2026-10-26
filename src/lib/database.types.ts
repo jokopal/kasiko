@@ -147,11 +147,13 @@ export type Database = {
         Row: {
           address: string
           created_at: string
+          drawer_float: number
           id: string
           is_active: boolean
           logo_path: string | null
           name: string
           opening_cash: number
+          opening_reserve: number
           owner_id: string
           phone: string
           primary_color: string
@@ -163,11 +165,13 @@ export type Database = {
         Insert: {
           address?: string
           created_at?: string
+          drawer_float?: number
           id?: string
           is_active?: boolean
           logo_path?: string | null
           name: string
           opening_cash?: number
+          opening_reserve?: number
           owner_id: string
           phone?: string
           primary_color?: string
@@ -179,11 +183,13 @@ export type Database = {
         Update: {
           address?: string
           created_at?: string
+          drawer_float?: number
           id?: string
           is_active?: boolean
           logo_path?: string | null
           name?: string
           opening_cash?: number
+          opening_reserve?: number
           owner_id?: string
           phone?: string
           primary_color?: string
@@ -402,6 +408,7 @@ export type Database = {
           is_active: boolean
           kind: Database['public']['Enums']['expense_kind']
           name: string
+          requires_note: boolean
           sort_order: number
           updated_at: string
         }
@@ -413,6 +420,7 @@ export type Database = {
           is_active?: boolean
           kind?: Database['public']['Enums']['expense_kind']
           name: string
+          requires_note?: boolean
           sort_order?: number
           updated_at?: string
         }
@@ -424,6 +432,7 @@ export type Database = {
           is_active?: boolean
           kind?: Database['public']['Enums']['expense_kind']
           name?: string
+          requires_note?: boolean
           sort_order?: number
           updated_at?: string
         }
@@ -936,6 +945,7 @@ export type Database = {
       business_branding: {
         Row: {
           address: string | null
+          drawer_float: number | null
           id: string | null
           is_active: boolean | null
           logo_path: string | null
@@ -948,6 +958,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          drawer_float?: number | null
           id?: string | null
           is_active?: boolean | null
           logo_path?: string | null
@@ -960,6 +971,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          drawer_float?: number | null
           id?: string | null
           is_active?: boolean | null
           logo_path?: string | null
@@ -1106,6 +1118,10 @@ export type Database = {
           profit: number
           transaction_count: number
         }[]
+      }
+      recategorize_expense: {
+        Args: { p_category_id: string; p_id: string }
+        Returns: Json
       }
       register_device: {
         Args: { p_business_id: string }

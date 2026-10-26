@@ -134,7 +134,7 @@ Nomor dipertahankan karena dirujuk di kode dan migrasi. Bila dua keputusan berte
 
 | # | Topik | Keputusan |
 |---|-------|-----------|
-| 29 | Label impor tak jelas | Label yang tidak jelas/tak dikenal **tidak diimpor** (jumlahnya tetap ditampilkan) sampai owner membuat kategorinya sendiri. Template tidak punya kategori cadangan. |
+| 29 | Label impor tak jelas | Label yang tidak jelas/tak dikenal **tidak diimpor** (jumlahnya tetap ditampilkan) sampai owner membuat kategorinya sendiri. *Impor tidak pernah memasukkan label tak dikenal ke "Lainnya" (#36); "Lainnya" hanya menampung label yang memang berarti lain-lain.* |
 | 30 | Upah harian | Upah kasir & driver harian diambil **dari uang laci**. |
 | 31 | Katalog Saimara | Tidak memakai data Olsera; katalog & harga **dibangun owner dari awal**. Harga di template hanya contoh. |
 | 32 | Skema database | Migrasi di `supabase/migrations`. Dua peran via `business_members` (satu akun satu peran, satu kasir per usaha, `is_active` memutus akses seketika). Ambang waktu perangkat: **> 5 menit di depan** atau **> 72 jam terlambat** → `needs_review`; batal kasir di luar ambang ditolak. Retry batal idempoten hanya bila membawa waktu perangkat yang sama. `seed.sql` hanya untuk lokal, dihasilkan dari template. |
@@ -146,6 +146,13 @@ Nomor dipertahankan karena dirujuk di kode dan migrasi. Bila dua keputusan berte
 |---|-------|-----------|
 | 34 | Bayar di akhir | Mobil dicatat sebagai **pesanan terbuka** (`orders`: layanan, plat, total) saat masuk; dibayar saat selesai lewat transaksi biasa (`create_transaction` dengan `order_id`) yang menutup pesanan dalam satu transaksi DB. Pesanan bukan pemasukan; disimpan lewat outbox (offline, idempoten, edit terbaru menurut waktu perangkat menang); kasir melihat semua pesanan terbuka; batal wajib alasan. Menjawab Pertanyaan #4. |
 | 35 | Diskon | Ada, **atas aktivasi owner**: owner membuat preset (`discounts`: persen 1–100 atau nominal) dan menyalakan/mematikannya; kasir hanya memilih preset aktif. Server menghitung ulang potongan (persen dibulatkan ke bawah), menolak potongan ≥ subtotal, dan menerima snapshot preset seperti harga (#15). Transaksi menyimpan `subtotal`, snapshot diskon, `discount_amount`, `total = subtotal − diskon`. Owner melihat total diskon per periode. Menjawab Pertanyaan #13; melengkapi #2. |
+
+### Keputusan tambahan — 2026-10-26
+
+| # | Topik | Keputusan |
+|---|-------|-----------|
+| 36 | "Lainnya" | Kategori pengeluaran bisa ditandai **wajib keterangan** (`expense_categories.requires_note`). Template punya satu "Lainnya" (operasional, boleh dari laci, wajib keterangan); "Lain-lain" yang sudah ada diganti nama jadi "Lainnya". Di kasir tampil sebagai kartu terpisah di bawah daftar kategori; keterangan ≥ 3 huruf dicek di perangkat **dan** di server (trigger). Owner bisa **memindahkan** pengeluaran ke kategori lain (`recategorize_expense`: hanya yang aktif, nominal/catatan/sumber tetap, tercatat di `audit_log`); dashboard & halaman Pengeluaran mengingatkan "Lainnya" yang perlu dipilah. |
+| 37 | Modal laci & uang dingin | **Modal laci** (`businesses.drawer_float`) = uang kembalian yang sama **setiap pagi**: Uang laci seharusnya = modal laci + tunai − pengeluaran laci; sisanya disetor ke owner. Kasir melihatnya lewat `business_branding`. **Uang dingin** (`businesses.opening_reserve`) = **saldo awal Dana Cadangan**: tidak mengubah profit, tidak dihitung kas bebas; tarik cadangan boleh memakainya, tetapi uang dingin tidak bisa diturunkan di bawah yang sudah ditarik. Diatur owner di Dashboard / Pengaturan bersama saldo awal kas; tercatat di audit. Menjawab sebagian Pertanyaan #12 (modal awal) dan #9 (arti uang dingin). |
 
 ---
 
@@ -206,11 +213,11 @@ scripts/          bootstrap-owner.ts, db-test.ts (rahasia dari .env.bootstrap)
 
 | Tabel | Isi | Akses kasir |
 |-------|-----|-------------|
-| `businesses` | brand, prefix nota, zona waktu, saldo awal kas | lewat view `business_branding` |
+| `businesses` | brand, prefix nota, zona waktu, saldo awal kas, modal laci, uang dingin (#37) | lewat view `business_branding` (+ modal laci) |
 | `business_members` | user × usaha × peran (`owner`/`cashier`), `is_active` | baris miliknya |
 | `business_configs` | template asal, tata letak dashboard, pemetaan label impor | — |
 | `catalog_categories`, `catalog_items` | layanan & harga | yang aktif |
-| `expense_categories` | `kind`, `allow_drawer` | aktif + diizinkan |
+| `expense_categories` | `kind`, `allow_drawer`, `requires_note` (#36) | aktif + diizinkan |
 | `devices` | kode perangkat 1–2 huruf | usahanya |
 | `transactions`, `transaction_items` | penjualan (id dari perangkat), item snapshot berurutan | **hari ini** saja |
 | `expenses` | `drawer` / `owner` | `drawer` **hari ini** saja |
@@ -233,11 +240,11 @@ Untuk periode `[from, to)`, hanya baris paid/active:
 - Profit operasional = Pemasukan − operasional
 - **Profit bersih** = Profit operasional − non-operasional (prive tidak dihitung)
 - Arus kas bersih = Pemasukan − semua pengeluaran
-- Saldo cadangan = Σ setor − Σ tarik (sepanjang waktu)
+- Saldo cadangan = uang dingin + Σ setor − Σ tarik (sepanjang waktu, #37)
 - Kas bebas = saldo awal kas + Σ pemasukan − Σ pengeluaran − Σ setor(`cash`) + Σ tarik
   — data impor **tidak** ikut; setor `capital` = uang baru owner, tidak mengurangi kas bebas.
   *Rumus ini turunan agent dari #8 — konfirmasi owner masih tertunda (Pertanyaan #9).*
-- Uang laci seharusnya (hari ini) = Σ penjualan tunai − Σ pengeluaran laci.
+- Uang laci seharusnya (hari ini) = modal laci + Σ penjualan tunai − Σ pengeluaran laci (#37).
 
 ### Nomor nota
 
@@ -292,8 +299,9 @@ Legenda: ✅ selesai & teruji · 🟡 ada tetapi belum teruji penuh / belum live
 
 | Area | Status | Catatan |
 |------|--------|---------|
-| Fondasi kode, kualitas, CI lokal | ✅ | 210 tes Vitest, 15 E2E asap (3 perangkat, tanpa menulis data), lint/format bersih |
-| Database: skema, RLS, RPC, rumus, audit | ✅ | 6 migrasi live di produksi; 129 tes pgTAP hijau di produksi |
+| Fondasi kode, kualitas, CI lokal | ✅ | 216 tes Vitest, 15 E2E asap (3 perangkat, tanpa menulis data), lint/format bersih |
+| Database: skema, RLS, RPC, rumus, audit | ✅ | 6 migrasi live di produksi; 151 tes pgTAP hijau (termasuk migrasi `0700`) |
+| "Lainnya" wajib keterangan + pindah kategori; modal laci & uang dingin (#36, #37) | 🟡 | kode + 22 tes pgTAP; **migrasi `0700` menunggu diterapkan ke produksi** |
 | Edge Function `manage-cashier`, `bootstrap-owner` | ✅ | ter-deploy & diuji penolakan aksesnya |
 | Akun owner & usaha Saimara di produksi | ✅ | dibuat 2026-10-25 dari template `cuci-mobil` |
 | Sign-up publik mati | ✅ | dimatikan owner di dashboard |
@@ -357,9 +365,9 @@ Yang **masih terbuka** (tanyakan sebelum fitur terkait dikerjakan):
 | 5 | Daftar layanan & harga Saimara (owner membangun sendiri, #31) — kapan siap? | Go-live |
 | 6 | Logo & warna Saimara. | R2 |
 | 7 | Zona waktu Saimara (WIB/WITA/WIT) — menentukan batas "hari ini". Saat ini WIB. | R1 |
-| 9 | Konfirmasi rumus kas bebas & arti saldo awal kas (bagian 7). | R5 |
+| 9 | Konfirmasi rumus kas bebas (bagian 7). Uang dingin sudah jelas (#37). | R5 |
 | 11 | Dana cadangan terpisah per usaha? (asumsi: ya) | R5 |
-| 12 | Modal awal laci & tutup kasir (hitung fisik, setoran ke owner, selisih)? | Usulan R4/R5 |
+| 12 | Tutup kasir: hitung fisik laci, setoran ke owner, catat selisih? (Modal laci harian sudah: #37.) | Usulan R4/R5 |
 | 14 | Lingkungan produksi: staging terpisah, backup (paket Supabase), SMTP untuk reset kata sandi owner, pemantauan error. | R6 |
 | 18 | Hosting sudah Vercel (gratis). Sisa: domain sendiri? Hubungkan Vercel ke repo utama atau sinkronkan fork. | R3 |
 | 19 | Nonaktifkan kunci JWT lama setelah aplikasi memakai kunci baru? | setelah R1 |

@@ -1,3 +1,4 @@
+import { noteProblem } from '@/features/expenses/rules'
 import type { DeviceRecord } from '@/features/offline/db'
 import { takeSequence } from '@/features/offline/device'
 import { enqueue } from '@/features/offline/outbox'
@@ -114,9 +115,10 @@ export async function recordDrawerExpense(
   if (!Number.isSafeInteger(input.amount) || input.amount <= 0) {
     return fail('Nominal harus lebih dari 0')
   }
-  if (!input.categories.some((c) => c.id === input.categoryId && isDrawerCategory(c))) {
-    return fail('Pilih kategori pengeluaran')
-  }
+  const category = input.categories.find((c) => c.id === input.categoryId)
+  if (!category || !isDrawerCategory(category)) return fail('Pilih kategori pengeluaran')
+  const problem = noteProblem(category, input.note)
+  if (problem) return fail(problem)
   const record: Expense = {
     id: newId(),
     businessId: input.businessId,

@@ -64,7 +64,15 @@ export function templateRows(
   }
 
   for (const category of template.expenseCategories) {
-    if (expenseCategories.some((c) => sameName(c.name, category.name))) continue
+    // Mirrors apply_template_rows: never a second catch-all "Lainnya".
+    const requiresNote = category.requiresNote ?? false
+    if (
+      expenseCategories.some(
+        (c) => sameName(c.name, category.name) || (requiresNote && c.requiresNote),
+      )
+    ) {
+      continue
+    }
     const row: ExpenseCategory = {
       id: newId(),
       businessId,
@@ -73,6 +81,7 @@ export function templateRows(
       isActive: true,
       kind: category.kind,
       allowDrawer: category.allowDrawer,
+      requiresNote,
     }
     expenseCategories.push(row)
     added.expenseCategories.push(row)

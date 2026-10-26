@@ -14,6 +14,8 @@ const business: Business = {
   receiptPrefix: 'SMR',
   timezone: 'Asia/Jakarta',
   openingCash: 0,
+  drawerFloat: 0,
+  openingReserve: 0,
   isActive: true,
 }
 const device: DeviceRecord = {
@@ -85,7 +87,7 @@ describe('requestVoid', () => {
 })
 
 describe('recordDrawerExpense', () => {
-  const drawer = { kind: 'operating', allowDrawer: true } as const
+  const drawer = { kind: 'operating', allowDrawer: true, requiresNote: false } as const
   const categories: ExpenseCategory[] = [
     { id: 'c1', businessId: 'biz', name: 'Bahan', sortOrder: 0, isActive: true, ...drawer },
     { id: 'c2', businessId: 'biz', name: 'Lama', sortOrder: 1, isActive: false, ...drawer },
@@ -97,6 +99,16 @@ describe('recordDrawerExpense', () => {
       isActive: true,
       kind: 'non_operating',
       allowDrawer: false,
+      requiresNote: false,
+    },
+    {
+      ...drawer,
+      id: 'c4',
+      businessId: 'biz',
+      name: 'Lainnya',
+      sortOrder: 3,
+      isActive: true,
+      requiresNote: true,
     },
   ]
 
@@ -116,6 +128,18 @@ describe('recordDrawerExpense', () => {
     const base = { businessId: 'biz', deviceId: 'dev-1', categories, note: '' }
     expect((await recordDrawerExpense({ ...base, categoryId: 'c2', amount: 1 })).ok).toBe(false)
     expect((await recordDrawerExpense({ ...base, categoryId: 'c1', amount: 0 })).ok).toBe(false)
+  })
+
+  it('queues "Lainnya" only with a note (decision #36)', async () => {
+    const base = {
+      businessId: 'biz',
+      deviceId: 'dev-1',
+      categories,
+      amount: 10_000,
+      categoryId: 'c4',
+    }
+    expect((await recordDrawerExpense({ ...base, note: ' ab ' })).ok).toBe(false)
+    expect((await recordDrawerExpense({ ...base, note: 'Beli lampu teras' })).ok).toBe(true)
   })
 
   it('rejects categories the owner keeps off the cashier screen', async () => {
