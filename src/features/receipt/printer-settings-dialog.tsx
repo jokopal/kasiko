@@ -162,7 +162,8 @@ export function PrinterSettingsDialog({
               </div>
               <FieldDescription>
                 Printer harus mendukung Bluetooth Low Energy (BLE). Nyalakan printer, lalu pilih
-                namanya di daftar yang muncul.
+                namanya di daftar yang muncul. Jika namanya tidak muncul, printer hanya memakai
+                Bluetooth lama dan tidak bisa dipakai dari browser.
               </FieldDescription>
             </Field>
           ) : (

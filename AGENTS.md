@@ -154,6 +154,13 @@ Nomor dipertahankan karena dirujuk di kode dan migrasi. Bila dua keputusan berte
 | 36 | "Lainnya" | Kategori pengeluaran bisa ditandai **wajib keterangan** (`expense_categories.requires_note`). Template punya satu "Lainnya" (operasional, boleh dari laci, wajib keterangan); "Lain-lain" yang sudah ada diganti nama jadi "Lainnya". Di kasir tampil sebagai kartu terpisah di bawah daftar kategori; keterangan ≥ 3 huruf dicek di perangkat **dan** di server (trigger). Owner bisa **memindahkan** pengeluaran ke kategori lain (`recategorize_expense`: hanya yang aktif, nominal/catatan/sumber tetap, tercatat di `audit_log`); dashboard & halaman Pengeluaran mengingatkan "Lainnya" yang perlu dipilah. |
 | 37 | Modal laci & uang dingin | **Modal laci** (`businesses.drawer_float`) = uang kembalian yang sama **setiap pagi**: Uang laci seharusnya = modal laci + tunai − pengeluaran laci; sisanya disetor ke owner. Kasir melihatnya lewat `business_branding`. **Uang dingin** (`businesses.opening_reserve`) = **saldo awal Dana Cadangan**: tidak mengubah profit, tidak dihitung kas bebas; tarik cadangan boleh memakainya, tetapi uang dingin tidak bisa diturunkan di bawah yang sudah ditarik. Diatur owner di Dashboard / Pengaturan bersama saldo awal kas; tercatat di audit. Menjawab sebagian Pertanyaan #12 (modal awal) dan #9 (arti uang dingin). |
 
+### Keputusan tambahan — 2026-10-31
+
+| # | Topik | Keputusan |
+|---|-------|-----------|
+| 38 | Template impor & tag | Owner mengunduh template Excel dari halaman Impor Data, dibuat dari kategori aktif usahanya (`import-template.ts`). Kolom A berisi **tag**: `#pendapatan` (boleh beberapa baris, dijumlahkan), `#lewati` (tidak diimpor, #29), `#<nama-kategori>` (langsung ke kategori itu). Kolom B bebas. Urutan pemetaan: pilihan manual > tag > tersimpan > aturan template > tak dikenal. Format Excel lama tetap diterima. Salinan berisi data asli hanya disimpan lokal di `template-excel/` (ter-ignore, #27). |
+| 39 | Detail transaksi owner | Daftar Transaksi punya tombol **Detail**: nota persis seperti tercetak (fungsi `formatReceipt` yang sama, #5), ditambah status, kode perangkat, cara bayar, waktu tiba di server, dan pembatalan. Owner bisa cetak ulang dari situ. Jumlah/waktu cetak **tidak** dicatat. |
+
 ---
 
 ## 6. Arsitektur & stack
@@ -174,7 +181,9 @@ Perangkat kasir (PWA)                     Perangkat owner (browser)
 
 - **Frontend:** React 19 + Vite + TypeScript (strict + `noUncheckedIndexedAccess`), React Router,
   Tailwind CSS v4, shadcn/ui + lucide-react, sonner. Grafik Recharts (chunk owner saja).
-  Ekspor/impor Excel: SheetJS dari CDN resmi (`xlsx` di npm berhenti di 0.18.5 dengan CVE).
+  Ekspor/impor Excel: SheetJS dari CDN resmi (`xlsx` di npm berhenti di 0.18.5 dengan CVE);
+  template impor ditulis dengan ExcelJS (warna, freeze, dropdown), di-lazy-load, tidak ikut
+  precache kasir.
 - **Offline:** `vite-plugin-pwa` (prompt "Versi baru tersedia"), Dexie (cache katalog + outbox).
 - **Server state owner:** TanStack Query — *tercantum sejak awal tetapi belum dipasang*;
   dipasang saat R1.
@@ -299,23 +308,25 @@ Legenda: ✅ selesai & teruji · 🟡 ada tetapi belum teruji penuh / belum live
 
 | Area | Status | Catatan |
 |------|--------|---------|
-| Fondasi kode, kualitas, CI lokal | ✅ | 216 tes Vitest, 15 E2E asap (3 perangkat, tanpa menulis data), lint/format bersih |
-| Database: skema, RLS, RPC, rumus, audit | ✅ | 6 migrasi live di produksi; 151 tes pgTAP hijau (termasuk migrasi `0700`) |
-| "Lainnya" wajib keterangan + pindah kategori; modal laci & uang dingin (#36, #37) | 🟡 | kode + 22 tes pgTAP; **migrasi `0700` menunggu diterapkan ke produksi** |
+| Fondasi kode, kualitas, CI lokal | ✅ | 242 tes Vitest, 15 E2E asap (3 perangkat, tanpa menulis data), lint/format bersih |
+| Database: skema, RLS, RPC, rumus, audit | ✅ | 7 migrasi live di produksi; 151 tes pgTAP hijau |
+| "Lainnya" wajib keterangan + pindah kategori; modal laci & uang dingin (#36, #37) | ✅ | migrasi `0700` live di produksi (2026-10-26) |
 | Edge Function `manage-cashier`, `bootstrap-owner` | ✅ | ter-deploy & diuji penolakan aksesnya |
 | Akun owner & usaha Saimara di produksi | ✅ | dibuat 2026-10-25 dari template `cuci-mobil` |
 | Sign-up publik mati | ✅ | dimatikan owner di dashboard |
 | Login & peran memakai Supabase Auth | ✅ | owner (email) & kasir (nama pengguna); sesi tersimpan untuk kasir offline |
 | Data aplikasi dari database | ✅ | mode pratinjau **dihapus** (#23); kasir via RPC + outbox, owner via RLS/RPC + TanStack Query |
 | Bayar di akhir (pesanan) & diskon | ✅ | migrasi `0600` live di produksi (2026-10-25) |
-| Kasir: POS, bayar, nota (print/WA), riwayat, ringkasan, batal, pengeluaran laci | 🟡 | tersambung ke RPC; alur tulis belum diuji E2E terhadap database (menunggu staging, #20); Bluetooth belum diuji printer fisik |
+| Kasir: POS, bayar, nota (print/WA), riwayat, ringkasan, batal, pengeluaran laci | 🟡 | tersambung ke RPC; alur tulis belum diuji E2E terhadap database (menunggu staging, #20); cetak BLE teruji sampai byte ke printer tiruan, **belum diuji di DT-58D fisik** |
 | Offline: outbox, sync, registrasi perangkat, PWA | 🟡 | transport & registrasi ke RPC; offline→online teruji dengan transport tiruan, E2E nyata siap di `e2e-live/` (menunggu staging) |
 | Owner Monitor: dashboard, rekap bulanan, transaksi + ekspor | ✅ | angka dari fungsi SQL; ekspor Excel/CSV transaksi |
 | Owner Manajemen: pengeluaran, cadangan, impor Excel | ✅ | ekspor pengeluaran; rumus kas bebas masih menunggu konfirmasi (#9) |
 | Owner Admin: katalog, kategori, diskon, pengaturan, template, tambah usaha, akun kasir | ✅ | akun kasir via `manage-cashier`; upload logo ke Storage |
 | Storage logo | ✅ | bucket `logos` + policy (dalam migrasi `0600`) |
 | Hosting & domain | 🟡 | Vercel (paket gratis) `kasiko-snowy.vercel.app` — proyek Vercel terhubung ke **fork** `loypandia12-cpu/kasiko` yang masih di commit lama; domain sendiri belum |
-| Riwayat Excel 2025–2026 di produksi | ⬜ | alat impor siap, menunggu R1 |
+| Template impor Excel & tag (#38) | ✅ | diuji di Excel asli dan lewat `import_history` (transaksi di-rollback) dengan data asli: cocok sampai rupiah |
+| Detail transaksi owner (#39) | ✅ | diuji di browser terhadap data produksi (hanya baca) |
+| Riwayat Excel 2025–2026 di produksi | ⬜ | alat impor & salinan siap; owner mengimpor dari halaman Impor Data |
 | Operasional produksi (backup, monitoring, SMTP) | ⬜ | Pertanyaan #14 |
 
 **Ringkasnya:** fondasi dan database sudah kuat dan live, dan semua layar sudah ada — tetapi
@@ -361,7 +372,7 @@ Yang **masih terbuka** (tanyakan sebelum fitur terkait dikerjakan):
 | # | Pertanyaan | Dibutuhkan untuk |
 |---|------------|------------------|
 | 2 | Perangkat kasir Saimara: Android, iPhone/iPad, atau laptop? (iOS tidak bisa cetak Bluetooth langsung.) | R3, R6 |
-| 3 | Printer thermal: sudah ada? Merek/tipe, 58 atau 80 mm? **Wajib BLE** — Web Bluetooth tidak bisa ke Bluetooth Classic (SPP). | R6 |
+| 3 | Printer: **Digit Up DT-58D**, 58 mm, 9V/2A, label "windows+android+ios". **Belum pasti BLE** — Web Bluetooth tidak bisa ke Bluetooth Classic (SPP). Uji di Chrome Android: Pengaturan printer → Hubungkan → Tes cetak. | R6 |
 | 5 | Daftar layanan & harga Saimara (owner membangun sendiri, #31) — kapan siap? | Go-live |
 | 6 | Logo & warna Saimara. | R2 |
 | 7 | Zona waktu Saimara (WIB/WITA/WIT) — menentukan batas "hari ini". Saat ini WIB. | R1 |

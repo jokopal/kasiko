@@ -13,10 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { SyncState } from '@/features/offline/local-view'
-import { formatReceipt } from '@/features/receipt/format-receipt'
-import { printerSettings } from '@/features/receipt/printer-settings'
-import { ReceiptActions } from '@/features/receipt/receipt-actions'
-import { ReceiptPaper } from '@/features/receipt/receipt-paper'
+import { ReceiptDetail } from '@/features/receipt/receipt-detail'
 import { formatLongDate, formatTime } from '@/lib/datetime'
 import { formatRupiah } from '@/lib/money'
 import { PAYMENT_METHOD_LABEL, type Business, type Expense, type Transaction } from '@/lib/types'
@@ -197,7 +194,6 @@ function ReprintDialog({
   business: Business
   onClose: () => void
 }) {
-  const { paperWidth } = printerSettings.useValue()
   return (
     <Dialog open={transaction !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[100dvh] overflow-y-auto sm:max-w-md">
@@ -205,18 +201,7 @@ function ReprintDialog({
           <DialogTitle>Cetak ulang nota</DialogTitle>
           <DialogDescription className="font-mono">{transaction?.receiptNo}</DialogDescription>
         </DialogHeader>
-        {transaction && (
-          <>
-            <div className="flex justify-center rounded-lg bg-muted p-3">
-              <ReceiptPaper
-                lines={formatReceipt(transaction, business, paperWidth)}
-                paper={paperWidth}
-                className="max-w-full overflow-x-auto p-3 shadow-sm"
-              />
-            </div>
-            <ReceiptActions transaction={transaction} business={business} />
-          </>
-        )}
+        {transaction && <ReceiptDetail transaction={transaction} business={business} />}
       </DialogContent>
     </Dialog>
   )

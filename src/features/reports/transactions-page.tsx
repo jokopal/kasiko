@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { BanIcon, DownloadIcon } from 'lucide-react'
+import { BanIcon, DownloadIcon, ReceiptTextIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { VoidDialog } from '@/components/void-dialog'
@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils'
 import { downloadCsv, downloadWorkbook } from './monthly-export'
 import { PeriodPicker } from './period-picker'
 import { transactionSheetRows } from './table-export'
+import { TransactionDetailDialog } from './transaction-detail-dialog'
 import { usePeriod } from './use-period'
 
 const PAGE_SIZE = 50
@@ -51,6 +52,7 @@ export function TransactionsPage() {
   const [status, setStatus] = useState('all')
   const [limit, setLimit] = useState(PAGE_SIZE)
   const [target, setTarget] = useState<Transaction | null>(null)
+  const [detail, setDetail] = useState<Transaction | null>(null)
 
   const rows = transactions
     .filter((t) => method === 'all' || t.paymentMethod === method)
@@ -149,11 +151,21 @@ export function TransactionsPage() {
               <Badge variant="outline">{PAYMENT_METHOD_LABEL[t.paymentMethod]}</Badge>
               {t.plateNumber && <Badge variant="secondary">{t.plateNumber}</Badge>}
               {t.status === 'void' && <Badge variant="destructive">Dibatalkan</Badge>}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto"
+                aria-label={`Detail ${t.receiptNo}`}
+                onClick={() => setDetail(t)}
+              >
+                <ReceiptTextIcon />
+                Detail
+              </Button>
               {t.status === 'paid' && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="ml-auto text-destructive"
+                  className="text-destructive"
                   onClick={() => setTarget(t)}
                 >
                   <BanIcon />
@@ -178,7 +190,7 @@ export function TransactionsPage() {
               <TableHead className="hidden lg:table-cell">Plat</TableHead>
               <TableHead>Metode</TableHead>
               <TableHead className="text-right">Total</TableHead>
-              <TableHead className="w-12 xl:w-28" />
+              <TableHead className="w-24 xl:w-52" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -211,7 +223,16 @@ export function TransactionsPage() {
                     </span>
                   )}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="whitespace-nowrap text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Detail ${t.receiptNo}`}
+                    onClick={() => setDetail(t)}
+                  >
+                    <ReceiptTextIcon />
+                    <span className="hidden xl:inline">Detail</span>
+                  </Button>
                   {t.status === 'paid' ? (
                     <Button
                       variant="ghost"
@@ -246,6 +267,11 @@ export function TransactionsPage() {
         </div>
       )}
 
+      <TransactionDetailDialog
+        transaction={detail}
+        business={business}
+        onClose={() => setDetail(null)}
+      />
       <VoidDialog
         open={target !== null}
         onOpenChange={(open) => !open && setTarget(null)}

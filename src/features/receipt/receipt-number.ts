@@ -21,6 +21,11 @@ export function isValidDeviceCode(code: string): boolean {
   return /^[A-Z]{1,2}$/.test(code)
 }
 
+/** The device that issued a receipt number, or null if the number has another shape. */
+export function deviceCodeOf(receiptNo: string): string | null {
+  return /-([A-Z]{1,2})\d{4}$/.exec(receiptNo)?.[1] ?? null
+}
+
 /** Returns the counter after issuing one number on `dayKey`; resets on a new day. */
 export function nextSequence(current: DailySequence | null, dayKey: string): DailySequence {
   const seq = current && current.dayKey === dayKey ? current.seq + 1 : 1

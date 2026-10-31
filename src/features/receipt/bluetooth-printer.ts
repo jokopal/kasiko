@@ -12,6 +12,8 @@ const PRINTER_SERVICES: BluetoothServiceUUID[] = [
   '49535343-fe7d-4ae5-8fa9-9fafd205e455',
   '0000ff00-0000-1000-8000-00805f9b34fb',
   '0000fee7-0000-1000-8000-00805f9b34fb',
+  '0000ffe0-0000-1000-8000-00805f9b34fb',
+  '0000ae30-0000-1000-8000-00805f9b34fb',
 ]
 
 /** Default ATT MTU leaves 20 bytes per write; safe for every printer. */
@@ -30,16 +32,24 @@ export function isBluetoothSupported(): boolean {
   return typeof navigator !== 'undefined' && 'bluetooth' in navigator
 }
 
+/** "Nothing there" is an answer while probing, not a failure of the whole search. */
+const noneIfNotFound = (error: unknown): never[] => {
+  if (error instanceof DOMException && error.name === 'NotFoundError') return []
+  throw error
+}
+
 async function findWritableCharacteristic(
   server: BluetoothRemoteGATTServer,
 ): Promise<BluetoothRemoteGATTCharacteristic> {
-  for (const service of await server.getPrimaryServices()) {
-    for (const characteristic of await service.getCharacteristics()) {
+  for (const service of await server.getPrimaryServices().catch(noneIfNotFound)) {
+    for (const characteristic of await service.getCharacteristics().catch(noneIfNotFound)) {
       const { write, writeWithoutResponse } = characteristic.properties
       if (write || writeWithoutResponse) return characteristic
     }
   }
-  throw new PrinterError('Printer tidak menyediakan jalur cetak yang dikenali')
+  throw new PrinterError(
+    'Perangkat ini tidak bisa dicetak lewat Bluetooth. Pakai Print atau WhatsApp.',
+  )
 }
 
 async function rememberedDevice(): Promise<BluetoothDevice | null> {
