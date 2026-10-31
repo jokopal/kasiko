@@ -48,6 +48,7 @@ supabase se.txt
 
 # Local-only checks against production
 e2e-local
+template-excel
 
 # Live E2E run state (holds test credentials)
 e2e-live/.state.json

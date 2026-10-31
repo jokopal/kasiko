@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { findTemplate, normalizeLabel, suggestCategory } from '@/features/business/templates'
+import { findTemplate, normalizeLabel } from '@/features/business/templates'
 import { KindDot } from '@/features/expenses/kind'
 import { OwnerPage } from '@/features/owner/page'
 import { fetchHistoricalDays, fetchLiveDays } from '@/features/data/owner'
@@ -49,13 +49,15 @@ import {
   parseCashflowWorkbook,
   planImport,
   readWorkbookFile,
+  resolveLabels,
   SKIP_LABEL,
+  type MappingSource,
   type ParsedWorkbook,
 } from './cashflow-import'
+import { ImportTemplateCard } from './import-template-card'
 
-type Source = 'saved' | 'auto' | 'unknown' | 'manual'
-
-const SOURCE_LABEL: Record<Source, string> = {
+const SOURCE_LABEL: Record<MappingSource, string> = {
+  tag: 'Tag',
   saved: 'Tersimpan',
   auto: 'Otomatis',
   unknown: 'Belum dikenali',
@@ -87,31 +89,20 @@ export function ImportPage() {
   })
   const liveDayKeys = useMemo(() => live.data ?? new Set<string>(), [live.data])
 
-  // Label → category: owner's choice, then the remembered mapping, then template rules.
-  // Anything still unknown is not imported until the owner picks a category (decision #29).
   const mapping = useMemo(() => {
     if (!parsed) return {}
     const template = findTemplate(config.templateId)
-    const rules = active.map((c) => {
-      const fromTemplate = template.expenseCategories.find(
-        (t) => normalizeLabel(t.name) === normalizeLabel(c.name),
-      )
-      return { name: c.name, aliases: fromTemplate?.aliases, keywords: fromTemplate?.keywords }
+    return resolveLabels(parsed.labels, {
+      categories: active,
+      rules: active.map((c) => {
+        const fromTemplate = template.expenseCategories.find(
+          (t) => normalizeLabel(t.name) === normalizeLabel(c.name),
+        )
+        return { name: c.name, aliases: fromTemplate?.aliases, keywords: fromTemplate?.keywords }
+      }),
+      saved: config.importMapping,
+      overrides,
     })
-    const byName = (name: string | null) =>
-      name ? active.find((c) => normalizeLabel(c.name) === normalizeLabel(name))?.id : undefined
-    const result: Record<string, { categoryId: string; source: Source }> = {}
-    for (const label of parsed.labels) {
-      const manual = overrides[label.key]
-      const saved = config.importMapping[label.key]
-      const auto = byName(suggestCategory(label.display, rules))
-      if (manual) result[label.key] = { categoryId: manual, source: 'manual' }
-      else if (saved && (saved === SKIP_LABEL || active.some((c) => c.id === saved))) {
-        result[label.key] = { categoryId: saved, source: 'saved' }
-      } else if (auto) result[label.key] = { categoryId: auto, source: 'auto' }
-      else result[label.key] = { categoryId: SKIP_LABEL, source: 'unknown' }
-    }
-    return result
   }, [parsed, overrides, config, active])
 
   const plan = useMemo(() => {
@@ -171,10 +162,10 @@ export function ImportPage() {
             <CardHeader>
               <CardTitle>1. Pilih file</CardTitle>
               <CardDescription>
-                Format arus kas bulanan: satu sheet per bulan (mis. <code>JAN-25</code>,{' '}
-                <code>MARET 26</code>), tanggal di baris pertama, baris <strong>Pendapatan</strong>,
-                lalu satu baris per jenis pengeluaran di kolom B. File hanya dibaca di perangkat
-                ini.
+                Template Kasiko atau format arus kas bulanan: satu sheet per bulan (mis.{' '}
+                <code>JAN-25</code>, <code>MARET 26</code>), tanggal di baris pertama, baris{' '}
+                <strong>Pendapatan</strong>, lalu satu baris per jenis pengeluaran di kolom B. File
+                hanya dibaca di perangkat ini.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap items-center gap-3">
@@ -344,7 +335,10 @@ export function ImportPage() {
           )}
         </div>
 
-        <ImportedSummary days={imported.data ?? []} onClear={() => setConfirmClear(true)} />
+        <div className="space-y-4">
+          <ImportTemplateCard business={business} categories={active} />
+          <ImportedSummary days={imported.data ?? []} onClear={() => setConfirmClear(true)} />
+        </div>
       </div>
 
       <Dialog open={confirmClear} onOpenChange={setConfirmClear}>

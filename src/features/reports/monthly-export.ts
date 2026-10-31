@@ -84,7 +84,11 @@ const BOM = String.fromCharCode(0xfeff)
 export async function downloadCsv(fileName: string, rows: Cell[][]) {
   const XLSX = await import('xlsx')
   const csv = XLSX.utils.sheet_to_csv(XLSX.utils.aoa_to_sheet(rows))
-  const url = URL.createObjectURL(new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' }))
+  downloadBlob(fileName, new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' }))
+}
+
+export function downloadBlob(fileName: string, blob: Blob) {
+  const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
   link.download = fileName

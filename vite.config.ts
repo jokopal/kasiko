@@ -34,6 +34,8 @@ export default defineConfig({
       workbox: {
         // App shell: every built asset, so the cashier opens fully offline.
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // Spreadsheet libraries are owner-only and online-only; keep them off cashier devices.
+        globIgnores: ['**/exceljs*.js', '**/xlsx*.js'],
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
         // API traffic (Supabase) is never cached by the service worker; offline data

@@ -1,12 +1,18 @@
 import { sumRupiah } from '@/lib/money'
 import type { HistoricalDay } from '@/lib/types'
-import { normalizeLabel } from '@/features/business/templates'
+import {
+  normalizeLabel,
+  suggestCategory,
+  type ExpenseCategoryTemplate,
+} from '@/features/business/templates'
 import { daysOfMonth } from '@/features/reports/finance'
+import { categoryTags, GUIDE_SHEET, TAG_INCOME, TAG_SKIP, tagOf, TAGS_SHEET } from './import-tags'
 
 // Reader for the monthly cash-flow workbook many small businesses keep (decision #27):
 // one sheet per month, day numbers across row 1, a "Pendapatan" row, then one row per
 // expense label. Pure: it takes cell values, so it is tested without any spreadsheet
-// library and the same rules can later run server-side.
+// library and the same rules can later run server-side. The Kasiko template uses the same
+// layout with a tag in column A of each row (decision #38; see import-tags.ts).
 
 export type Cell = string | number | boolean | null | undefined
 
@@ -15,10 +21,17 @@ export interface SheetRows {
   rows: Cell[][]
 }
 
+export interface ParsedLine {
+  label: string
+  amount: number
+  /** The row's tag in a template file. */
+  tag?: string
+}
+
 export interface ParsedDay {
   dayKey: string
   income: number
-  lines: { label: string; amount: number }[]
+  lines: ParsedLine[]
 }
 
 export interface ParsedMonth {
@@ -28,10 +41,11 @@ export interface ParsedMonth {
 }
 
 export interface LabelSummary {
-  /** Normalized label — the mapping key. */
+  /** The mapping key: the row's tag, else its normalized label. */
   key: string
   /** First spelling seen, for display. */
   display: string
+  tag: string | null
   total: number
   entries: number
 }
@@ -75,7 +89,15 @@ export function monthKeyFromSheetName(name: string): string | null {
   return `${year}-${String(month).padStart(2, '0')}`
 }
 
-const STOP_LABELS = new Set(['pendapatan harian', 'omset', 'omzet', 'total net profit', 'total'])
+const STOP_LABELS = new Set([
+  'pendapatan harian',
+  'omset',
+  'omzet',
+  'total net profit',
+  'total',
+  'total pengeluaran',
+  'arus kas bersih',
+])
 const INCOME_LABELS = new Set(['pendapatan', 'pemasukan', 'omset harian'])
 const SUMMARY_HEADERS = new Set(['total', 'jumlah', 'subtotal'])
 
@@ -110,7 +132,11 @@ function parseSheet(sheet: SheetRows, monthKey: string, warnings: string[]): Par
     if (validDays.has(dayKey)) dayOfColumn.set(col, dayKey)
   })
 
-  const incomeRow = sheet.rows.findIndex((row) => INCOME_LABELS.has(label(row)))
+  // A template row says what it is through its tag; an old workbook through its label.
+  const tagAt = (row: number) => tagOf(sheet.rows[row]?.[0])
+  const isIncome = (row: Cell[], index: number) =>
+    tagAt(index) === TAG_INCOME || (tagAt(index) === null && INCOME_LABELS.has(label(row)))
+  const incomeRow = sheet.rows.findIndex(isIncome)
   if (incomeRow < 0) {
     warnings.push(`${sheet.name}: baris "Pendapatan" tidak ditemukan`)
     return { sheetName: sheet.name, monthKey, days: [] }
@@ -152,19 +178,30 @@ function parseSheet(sheet: SheetRows, monthKey: string, warnings: string[]): Par
   readRow(incomeRow, (dayKey, amount) => {
     dayFor(dayKey).income += amount
   })
-  for (let r = incomeRow + 1; r < sheet.rows.length; r++) {
+  // Tagged rows count wherever they sit, even above the income row.
+  const firstTagged = sheet.rows.findIndex((_, r) => tagAt(r) !== null)
+  const firstRow = firstTagged < 0 ? incomeRow + 1 : Math.min(firstTagged, incomeRow + 1)
+  for (let r = firstRow; r < sheet.rows.length; r++) {
+    if (r === incomeRow) continue
     const row = sheet.rows[r]
     const key = label(row)
-    if (STOP_LABELS.has(key)) break
+    const tag = tagAt(r)
+    if (tag === TAG_INCOME) {
+      readRow(r, (dayKey, amount) => {
+        dayFor(dayKey).income += amount
+      })
+      continue
+    }
+    if (!tag && STOP_LABELS.has(key)) break
     const display = (textOf(row?.[1]) || textOf(row?.[0])).replace(/\s+/g, ' ').trim()
-    if (key === '' || key === 'pengeluaran') {
+    if (!tag && (key === '' || key === 'pengeluaran')) {
       // Merged "Pengeluaran" heading or a spare row: values without a label are ambiguous.
       const hasValues = (row ?? []).some((cell, col) => col >= 2 && cellAmount(cell))
       if (hasValues) warnings.push(`${sheet.name} baris ${r + 1}: angka tanpa nama kategori`)
       continue
     }
     readRow(r, (dayKey, amount) => {
-      dayFor(dayKey).lines.push({ label: display, amount })
+      dayFor(dayKey).lines.push({ label: display, amount, ...(tag && { tag }) })
     })
   }
   const sorted = [...days.values()].sort((a, b) => a.dayKey.localeCompare(b.dayKey))
@@ -184,6 +221,7 @@ export function parseCashflowWorkbook(sheets: readonly SheetRows[]): ParsedWorkb
   const skippedSheets: string[] = []
   const byMonth = new Map<string, ParsedMonth>()
   for (const sheet of sheets) {
+    if (sheet.name === GUIDE_SHEET || sheet.name === TAGS_SHEET) continue
     const monthKey = monthKeyFromSheetName(sheet.name)
     if (!monthKey) {
       skippedSheets.push(sheet.name)
@@ -200,8 +238,14 @@ export function parseCashflowWorkbook(sheets: readonly SheetRows[]): ParsedWorkb
 
   const labels = new Map<string, LabelSummary>()
   for (const line of months.flatMap((m) => m.days.flatMap((d) => d.lines))) {
-    const key = normalizeLabel(line.label)
-    const entry = labels.get(key) ?? { key, display: line.label, total: 0, entries: 0 }
+    const key = lineKey(line)
+    const entry = labels.get(key) ?? {
+      key,
+      display: line.label,
+      tag: line.tag ?? null,
+      total: 0,
+      entries: 0,
+    }
     entry.total += line.amount
     entry.entries += 1
     labels.set(key, entry)
@@ -216,6 +260,58 @@ export function parseCashflowWorkbook(sheets: readonly SheetRows[]): ParsedWorkb
 
 /** Mapping value for a label the owner chose not to import (decision #29). */
 export const SKIP_LABEL = 'skip'
+
+/** The mapping key of a line. Skipped rows keep their own label, so each stays visible. */
+export function lineKey(line: Pick<ParsedLine, 'label' | 'tag'>): string {
+  return line.tag && line.tag !== TAG_SKIP ? line.tag : normalizeLabel(line.label)
+}
+
+export type MappingSource = 'tag' | 'saved' | 'auto' | 'unknown' | 'manual'
+
+export interface LabelMapping {
+  categoryId: string
+  source: MappingSource
+}
+
+export interface MappingContext {
+  /** Active categories of the business, in display order. */
+  categories: readonly { id: string; name: string; kind: ExpenseCategoryTemplate['kind'] }[]
+  rules: readonly Pick<ExpenseCategoryTemplate, 'name' | 'aliases' | 'keywords'>[]
+  saved: Readonly<Record<string, string>>
+  overrides: Readonly<Record<string, string>>
+}
+
+/**
+ * Label → category: the owner's choice here, then the row's tag, then the remembered
+ * mapping, then template rules. Anything still unknown is not imported until the owner
+ * picks a category (decision #29).
+ */
+export function resolveLabels(
+  labels: readonly LabelSummary[],
+  context: MappingContext,
+): Record<string, LabelMapping> {
+  const { categories, rules, saved, overrides } = context
+  const tags = new Map(categoryTags(categories).map((t) => [t.tag, t.categoryId]))
+  const byName = (name: string | null) =>
+    name ? categories.find((c) => normalizeLabel(c.name) === normalizeLabel(name))?.id : undefined
+  const result: Record<string, LabelMapping> = {}
+  for (const label of labels) {
+    const manual = overrides[label.key]
+    const remembered = saved[label.key]
+    const tagged = label.tag === TAG_SKIP ? SKIP_LABEL : label.tag && tags.get(label.tag)
+    const auto = byName(suggestCategory(label.display, rules))
+    if (manual) result[label.key] = { categoryId: manual, source: 'manual' }
+    else if (tagged) result[label.key] = { categoryId: tagged, source: 'tag' }
+    else if (
+      remembered &&
+      (remembered === SKIP_LABEL || categories.some((c) => c.id === remembered))
+    ) {
+      result[label.key] = { categoryId: remembered, source: 'saved' }
+    } else if (auto) result[label.key] = { categoryId: auto, source: 'auto' }
+    else result[label.key] = { categoryId: SKIP_LABEL, source: 'unknown' }
+  }
+  return result
+}
 
 export interface ImportPlan {
   days: HistoricalDay[]
@@ -247,7 +343,7 @@ export function planImport(
     }
     const byCategory = new Map<string, number>()
     for (const line of day.lines) {
-      const categoryId = mapping[normalizeLabel(line.label)]
+      const categoryId = mapping[lineKey(line)]
       if (!categoryId) throw new Error(`Label "${line.label}" belum dipetakan ke kategori`)
       if (categoryId === SKIP_LABEL) {
         skippedExpense += line.amount
