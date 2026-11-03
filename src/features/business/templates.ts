@@ -1,5 +1,5 @@
 import type { ExpenseKind } from '@/lib/types'
-import type { DashboardLayout, KpiId, PanelId } from './config'
+import { LAYOUT_VERSION, type DashboardLayout, type PanelId } from './config'
 
 // Business templates (decision #25): a starting set of catalog, expense categories and
 // dashboard layout. A new business is created from one; an existing business can apply
@@ -32,23 +32,19 @@ export interface BusinessTemplate {
   dashboard: DashboardLayout
 }
 
-const layout = (kpis: KpiId[], hiddenKpis: KpiId[], panels: PanelId[]): DashboardLayout => ({
-  kpis: [
-    ...kpis.map((id) => ({ id, visible: true })),
-    ...hiddenKpis.map((id) => ({ id, visible: false })),
+const layout = (panels: PanelId[], hidden: PanelId[]): DashboardLayout => ({
+  version: LAYOUT_VERSION,
+  panels: [
+    ...panels.map((id) => ({ id, visible: true })),
+    ...hidden.map((id) => ({ id, visible: false })),
   ],
-  panels: panels.map((id) => ({ id, visible: true })),
 })
 
-const ALL_PANELS: PanelId[] = [
-  'profitBreakdown',
-  'trend',
-  'monthly',
-  'paymentMethods',
-  'topItems',
-  'expenseMix',
-  'busyHours',
-]
+// Decision #40: three panels under the summary; the rest can be switched on.
+const SIMPLE_PANELS = layout(
+  ['trend', 'monthly', 'expenseMix'],
+  ['paymentMethods', 'topItems', 'busyHours'],
+)
 
 const op = (
   name: string,
@@ -206,11 +202,7 @@ const CAR_WASH: BusinessTemplate = {
       keywords: ['rumah', 'keluarga'],
     },
   ],
-  dashboard: layout(
-    ['income', 'expense', 'operatingProfit', 'profit', 'drawings', 'freeCash'],
-    ['netCashFlow', 'reserve'],
-    ALL_PANELS,
-  ),
+  dashboard: SIMPLE_PANELS,
 }
 
 const GENERAL: BusinessTemplate = {
@@ -247,19 +239,7 @@ const GENERAL: BusinessTemplate = {
       keywords: ['prive', 'owner'],
     },
   ],
-  dashboard: layout(
-    ['income', 'expense', 'profit', 'reserve', 'freeCash'],
-    ['operatingProfit', 'drawings', 'netCashFlow'],
-    [
-      'trend',
-      'paymentMethods',
-      'topItems',
-      'expenseMix',
-      'busyHours',
-      'profitBreakdown',
-      'monthly',
-    ],
-  ),
+  dashboard: SIMPLE_PANELS,
 }
 
 export const BUSINESS_TEMPLATES: readonly BusinessTemplate[] = [CAR_WASH, GENERAL]

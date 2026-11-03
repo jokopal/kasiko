@@ -23,7 +23,6 @@ import { PageLoading } from '@/components/page-loading'
 import { fetchFirstActivityDay, fetchMonthlyMatrix } from '@/features/data/owner'
 import { useOwnerData } from '@/features/data/owner-data'
 import { keys } from '@/features/data/query-client'
-import { OwnerPage } from '@/features/owner/page'
 import { businessDayKey, getZonedParts, startOfBusinessDayKey } from '@/lib/datetime'
 import { formatDigits, formatRupiah, sumRupiah } from '@/lib/money'
 import { EXPENSE_KIND_LABEL, EXPENSE_KINDS } from '@/lib/types'
@@ -52,7 +51,8 @@ const monthTitle = (key: string) =>
   `${MONTH_LONG[Number(key.slice(5, 7)) - 1] ?? ''} ${key.slice(0, 4)}`
 const cell = (value: number) => (value === 0 ? '' : formatDigits(value))
 
-export function MonthlyPage() {
+/** The Laporan "Bulanan" tab: the owner's spreadsheet layout, one month at a time. */
+export function MonthlyRecap() {
   const { business, expenseCategories } = useOwnerData()
   const tz = business.timezone
   const [params, setParams] = useSearchParams()
@@ -117,11 +117,12 @@ export function MonthlyPage() {
   }
 
   return (
-    <OwnerPage
-      title="Rekap Bulanan"
-      description="Format arus kas harian per kategori — sama seperti spreadsheet, terisi otomatis dari kasir."
-      actions={
-        <>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">
+          Format arus kas harian per kategori — sama seperti spreadsheet, bisa diimpor balik.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1">
             <Button
               variant="outline"
@@ -175,9 +176,8 @@ export function MonthlyPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </>
-      }
-    >
+        </div>
+      </div>
       {matrix ? (
         <>
           <MonthSummary matrix={matrix} />
@@ -193,7 +193,7 @@ export function MonthlyPage() {
       ) : (
         <PageLoading />
       )}
-    </OwnerPage>
+    </div>
   )
 }
 
@@ -203,17 +203,20 @@ function MonthSummary({ matrix }: { matrix: MonthlyMatrix }) {
     t.income > 0 ? `${Math.round((value / t.income) * 100)}% dari omset` : '—'
   const tiles = [
     {
-      label: 'Omset',
+      label: 'Pemasukan',
       value: t.income,
       note: `${matrix.income.filter((v) => v > 0).length} hari buka`,
     },
-    { label: 'Profit operasional', value: t.operatingProfit, note: share(t.operatingProfit) },
-    { label: 'Profit bersih', value: t.profit, note: share(t.profit), emphasis: true },
-    { label: 'Prive', value: t.drawings, note: 'Tidak mengurangi profit' },
-    { label: 'Arus kas bersih', value: t.netCashFlow, note: 'Sama dengan "Net Profit" di Excel' },
+    { label: 'Pengeluaran', value: t.expense, note: share(t.expense) },
+    {
+      label: 'Profit',
+      value: t.netCashFlow,
+      note: 'Sama dengan "Total Net Profit" di Excel',
+      emphasis: true,
+    },
   ]
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       {tiles.map((tile) => (
         <Card
           key={tile.label}

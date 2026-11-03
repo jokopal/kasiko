@@ -124,7 +124,7 @@ Nomor dipertahankan karena dirujuk di kode dan migrasi. Bila dua keputusan berte
 
 | # | Topik | Keputusan |
 |---|-------|-----------|
-| 24 | Jenis pengeluaran & profit | Kategori punya `kind`: **operating**, **non_operating** (cicilan, aset/renovasi), **drawing** (prive owner/keluarga). Profit operasional = Pemasukan − operasional; **Profit bersih = Profit operasional − non-operasional**; **prive tidak mengurangi profit** tetapi mengurangi kas bebas; Arus kas bersih = Pemasukan − semua pengeluaran (= "Total Net Profit" Excel lama). *Menggantikan rumus "Profit = Pemasukan − Pengeluaran" versi awal.* |
+| 24 | Jenis pengeluaran & profit | Kategori punya `kind`: **operating**, **non_operating** (cicilan, aset/renovasi), **drawing** (prive owner/keluarga). Profit operasional = Pemasukan − operasional; **Profit bersih = Profit operasional − non-operasional**; **prive tidak mengurangi profit** tetapi mengurangi kas bebas; Arus kas bersih = Pemasukan − semua pengeluaran (= "Total Net Profit" Excel lama). *Menggantikan rumus "Profit = Pemasukan − Pengeluaran" versi awal.* **Diganti #40 (2026-11-03) untuk semua tampilan:** profit = pemasukan − semua pengeluaran; `kind` tetap ada untuk memilah pengeluaran di Laporan. |
 | 25 | Templateable per usaha | Usaha dibuat dari **template** (`src/features/business/templates.ts`: katalog, kategori pengeluaran + jenis + izin kasir, tata letak dashboard, alias label impor). Menerapkan template hanya **menambah yang belum ada**. Konfigurasi owner per usaha di `business_configs`. Owner: Monitor / Manajemen / Admin. |
 | 26 | Kategori di kasir | `allow_drawer` per kategori: hanya kategori aktif + diizinkan yang tampil di kasir; server menolak yang lain. Gaji komisi harian **diisi manual**. "Gratis cuci" = biaya komisi pekerja untuk cuci gratis/promo. |
 | 27 | Data historis | Impor Excel arus kas → `historical_days` + `historical_expenses`. **Hanya untuk analisis**: tidak memengaruhi kas bebas, uang laci, atau daftar transaksi. Hari yang punya data kasir dilewati; impor ulang mengganti. File Excel **tidak pernah di-commit**, angkanya tidak ada di kode/seed. |
@@ -161,6 +161,13 @@ Nomor dipertahankan karena dirujuk di kode dan migrasi. Bila dua keputusan berte
 | 38 | Template impor & tag | Owner mengunduh template Excel dari halaman Impor Data, dibuat dari kategori aktif usahanya (`import-template.ts`). Kolom A berisi **tag**: `#pendapatan` (boleh beberapa baris, dijumlahkan), `#lewati` (tidak diimpor, #29), `#<nama-kategori>` (langsung ke kategori itu). Kolom B bebas. Urutan pemetaan: pilihan manual > tag > tersimpan > aturan template > tak dikenal. Format Excel lama tetap diterima. Salinan berisi data asli hanya disimpan lokal di `template-excel/` (ter-ignore, #27). |
 | 39 | Detail transaksi owner | Daftar Transaksi punya tombol **Detail**: nota persis seperti tercetak (fungsi `formatReceipt` yang sama, #5), ditambah status, kode perangkat, cara bayar, waktu tiba di server, dan pembatalan. Owner bisa cetak ulang dari situ. Jumlah/waktu cetak **tidak** dicatat. |
 
+### Keputusan tambahan — 2026-11-03
+
+| # | Topik | Keputusan |
+|---|-------|-----------|
+| 40 | Ringkasan sederhana | Dana dibagi empat: **Pemasukan, Pengeluaran, Profit, Kas**. **Profit = Pemasukan − semua pengeluaran** (prive & cicilan ikut; menggantikan tingkatan profit #24 di semua tampilan, `kind` tetap untuk memilah). Pengeluaran punya dua pintu: **Kasir** (laci) dan **Owner**; pengeluaran impor Excel tampil sebagai baris **Data impor**. Dashboard hanya menampilkan tiga kartu (Pemasukan, Pengeluaran, Profit), masing-masing **periode ini** dan **kumulatif sejak data pertama** (termasuk impor) dengan angka "sebelum periode" (kumulatif = sebelum + periode). **Kas** (saldo awal kas, modal) hanya di **Dana Cadangan**. Panel bawaan di bawah kartu: Tren harian, Tren bulanan, Komposisi pengeluaran; panel lain bisa dinyalakan. Tata letak versi lama di-reset sekali ke template (`LAYOUT_VERSION = 2`). Tidak mengubah SQL: angka dari `period_totals`. |
+| 41 | Halaman Laporan | `/owner/laporan` menggantikan Rekap Bulanan (`/owner/rekap` dialihkan). Tab: **Ringkasan** (sebelum / periode / kumulatif per pintu), **Harian** (pintu + profit kumulatif), **Pemasukan**, **Pengeluaran** (kategori, jenis, pintu, keterangan), **Per Kategori**, dan **Bulanan (format Excel)** (#28, tetap bisa diimpor balik). Satu model tabel (`report-tables.ts`) dipakai layar, Excel, dan PDF. Ekspor: **Excel** satu sheet per tab, **PDF** A4 mendatar (jsPDF + autotable, dimuat saat ekspor, tidak di-precache kasir). |
+
 ---
 
 ## 6. Arsitektur & stack
@@ -183,7 +190,7 @@ Perangkat kasir (PWA)                     Perangkat owner (browser)
   Tailwind CSS v4, shadcn/ui + lucide-react, sonner. Grafik Recharts (chunk owner saja).
   Ekspor/impor Excel: SheetJS dari CDN resmi (`xlsx` di npm berhenti di 0.18.5 dengan CVE);
   template impor ditulis dengan ExcelJS (warna, freeze, dropdown), di-lazy-load, tidak ikut
-  precache kasir.
+  precache kasir. PDF Laporan: jsPDF + jspdf-autotable, di-lazy-load, tidak ikut precache.
 - **Offline:** `vite-plugin-pwa` (prompt "Versi baru tersedia"), Dexie (cache katalog + outbox).
 - **Server state owner:** TanStack Query — *tercantum sejak awal tetapi belum dipasang*;
   dipasang saat R1.
@@ -246,11 +253,13 @@ Untuk periode `[from, to)`, hanya baris paid/active:
 
 - Pemasukan = Σ total transaksi (+ pendapatan hari impor)
 - Pengeluaran = Σ semua pengeluaran (semua sumber & jenis, + hari impor)
-- Profit operasional = Pemasukan − operasional
-- **Profit bersih** = Profit operasional − non-operasional (prive tidak dihitung)
-- Arus kas bersih = Pemasukan − semua pengeluaran
+- **Profit** = Pemasukan − semua pengeluaran (#40; sama dengan "arus kas bersih" /
+  "Total Net Profit" Excel). Profit operasional & profit bersih (#24) masih dihitung SQL
+  tetapi tidak ditampilkan.
+- Pintu pengeluaran: Kasir = sumber `drawer`, Owner = `owner`, Data impor = sisanya.
+- **Kumulatif** = nilai dari data pertama sampai akhir periode = sebelum periode + periode.
 - Saldo cadangan = uang dingin + Σ setor − Σ tarik (sepanjang waktu, #37)
-- Kas bebas = saldo awal kas + Σ pemasukan − Σ pengeluaran − Σ setor(`cash`) + Σ tarik
+- Kas (dulu "kas bebas"; hanya di Dana Cadangan, #40) = saldo awal kas + Σ pemasukan − Σ pengeluaran − Σ setor(`cash`) + Σ tarik
   — data impor **tidak** ikut; setor `capital` = uang baru owner, tidak mengurangi kas bebas.
   *Rumus ini turunan agent dari #8 — konfirmasi owner masih tertunda (Pertanyaan #9).*
 - Uang laci seharusnya (hari ini) = modal laci + Σ penjualan tunai − Σ pengeluaran laci (#37).
@@ -286,7 +295,9 @@ Simpan nonaktif bila uang kurang; setelah simpan: Cetak / Print / WhatsApp / Tra
 format `Rp 35.000`.
 
 **Owner** — pemilih usaha + tambah usaha (warna utama berganti per usaha); periode Hari ini /
-7 hari / Bulan ini / Rentang + pembanding periode sebelumnya; tabel dengan filter (tanggal,
+7 hari / Bulan ini / Rentang + pembanding periode sebelumnya; dashboard = tiga kartu
+Pemasukan / Pengeluaran (Kasir, Owner, Data impor) / Profit, periode + kumulatif (#40);
+Laporan bertab dengan ekspor Excel & PDF (#41); tabel dengan filter (tanggal,
 metode, status, kategori, sumber, jenis) dan ekspor; pratinjau kasir & nota di pengaturan;
 pemeriksaan kontras WCAG untuk warna brand.
 
@@ -308,7 +319,7 @@ Legenda: ✅ selesai & teruji · 🟡 ada tetapi belum teruji penuh / belum live
 
 | Area | Status | Catatan |
 |------|--------|---------|
-| Fondasi kode, kualitas, CI lokal | ✅ | 242 tes Vitest, 15 E2E asap (3 perangkat, tanpa menulis data), lint/format bersih |
+| Fondasi kode, kualitas, CI lokal | ✅ | 258 tes Vitest, 15 E2E asap (3 perangkat, tanpa menulis data), lint/format bersih |
 | Database: skema, RLS, RPC, rumus, audit | ✅ | 7 migrasi live di produksi; 151 tes pgTAP hijau |
 | "Lainnya" wajib keterangan + pindah kategori; modal laci & uang dingin (#36, #37) | ✅ | migrasi `0700` live di produksi (2026-10-26) |
 | Edge Function `manage-cashier`, `bootstrap-owner` | ✅ | ter-deploy & diuji penolakan aksesnya |
@@ -319,14 +330,15 @@ Legenda: ✅ selesai & teruji · 🟡 ada tetapi belum teruji penuh / belum live
 | Bayar di akhir (pesanan) & diskon | ✅ | migrasi `0600` live di produksi (2026-10-25) |
 | Kasir: POS, bayar, nota (print/WA), riwayat, ringkasan, batal, pengeluaran laci | 🟡 | tersambung ke RPC; alur tulis belum diuji E2E terhadap database (menunggu staging, #20); cetak BLE teruji sampai byte ke printer tiruan, **belum diuji di DT-58D fisik** |
 | Offline: outbox, sync, registrasi perangkat, PWA | 🟡 | transport & registrasi ke RPC; offline→online teruji dengan transport tiruan, E2E nyata siap di `e2e-live/` (menunggu staging) |
-| Owner Monitor: dashboard, rekap bulanan, transaksi + ekspor | ✅ | angka dari fungsi SQL; ekspor Excel/CSV transaksi |
+| Owner Monitor: dashboard, laporan, transaksi + ekspor | ✅ | angka dari fungsi SQL; ekspor Excel/CSV transaksi |
+| Ringkasan sederhana & Laporan bertab (#40, #41) | ✅ | diuji di browser terhadap data produksi (hanya baca): tab, Excel 5 sheet, PDF 15 halaman, Ringkasan = Harian = SQL |
 | Owner Manajemen: pengeluaran, cadangan, impor Excel | ✅ | ekspor pengeluaran; rumus kas bebas masih menunggu konfirmasi (#9) |
 | Owner Admin: katalog, kategori, diskon, pengaturan, template, tambah usaha, akun kasir | ✅ | akun kasir via `manage-cashier`; upload logo ke Storage |
 | Storage logo | ✅ | bucket `logos` + policy (dalam migrasi `0600`) |
 | Hosting & domain | 🟡 | Vercel (paket gratis) `kasiko-snowy.vercel.app` — proyek Vercel terhubung ke **fork** `loypandia12-cpu/kasiko` yang masih di commit lama; domain sendiri belum |
 | Template impor Excel & tag (#38) | ✅ | diuji di Excel asli dan lewat `import_history` (transaksi di-rollback) dengan data asli: cocok sampai rupiah |
 | Detail transaksi owner (#39) | ✅ | diuji di browser terhadap data produksi (hanya baca) |
-| Riwayat Excel 2025–2026 di produksi | ⬜ | alat impor & salinan siap; owner mengimpor dari halaman Impor Data |
+| Riwayat Excel 2025–2026 di produksi | ✅ | diimpor ulang owner 2026-11-03: 637 hari (3 Jan 2025 – 30 Okt 2026) |
 | Operasional produksi (backup, monitoring, SMTP) | ⬜ | Pertanyaan #14 |
 
 **Ringkasnya:** fondasi dan database sudah kuat dan live, dan semua layar sudah ada — tetapi

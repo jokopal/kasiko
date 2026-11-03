@@ -154,7 +154,7 @@ export function ImportPage() {
   return (
     <OwnerPage
       title="Impor Data"
-      description="Masukkan riwayat dari spreadsheet arus kas agar tren dan perbandingan langsung terisi. Data impor hanya untuk analisis — tidak mengubah kas bebas atau uang laci."
+      description="Masukkan riwayat dari spreadsheet arus kas agar tren dan perbandingan langsung terisi. Data impor hanya untuk analisis — tidak mengubah kas atau uang laci."
     >
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-4">
@@ -253,7 +253,7 @@ export function ImportPage() {
                 <CardHeader className="border-b pb-4">
                   <CardTitle>3. Cocokkan label dengan kategori</CardTitle>
                   <CardDescription>
-                    Jenis kategori menentukan hitungan profit. Pilihan Anda diingat untuk impor
+                    Jenis kategori memilah pengeluaran di Laporan. Pilihan Anda diingat untuk impor
                     berikutnya.
                     {needsReview.length > 0 &&
                       ` ${needsReview.length} label belum dikenali dan tidak diimpor. Kalau perlu, tambahkan kategorinya di Admin → Kategori Pengeluaran lalu pilih di sini.`}

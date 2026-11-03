@@ -204,9 +204,9 @@ export const EXPENSE_KIND_LABEL: Record<ExpenseKind, string> = {
 }
 
 export const EXPENSE_KIND_HINT: Record<ExpenseKind, string> = {
-  operating: 'Biaya menjalankan usaha sehari-hari. Mengurangi profit operasional.',
-  non_operating: 'Cicilan utang, pembelian aset, renovasi. Mengurangi profit bersih.',
-  drawing: 'Uang diambil owner/keluarga. Tidak mengurangi profit, tetapi mengurangi kas.',
+  operating: 'Biaya menjalankan usaha sehari-hari: bahan, gaji, listrik, sewa.',
+  non_operating: 'Cicilan utang, pembelian aset, renovasi.',
+  drawing: 'Uang diambil owner/keluarga.',
 }
 
 export const DISCOUNT_TYPE_LABEL: Record<DiscountType, string> = {

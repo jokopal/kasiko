@@ -53,10 +53,7 @@ export function monthSheetRows(
     [null, 'Pendapatan Harian', ...matrix.net, t.netCashFlow],
     [null, 'Omset', t.income],
     [null, 'Total Net Profit', t.netCashFlow],
-    [null, 'Profit operasional', t.operatingProfit],
-    [null, 'Profit bersih', t.profit],
-    [null, 'Prive', t.drawings],
-    [null, '* Dibuat oleh Kasiko. Total Net Profit = arus kas bersih (prive ikut dikurangi).'],
+    [null, '* Dibuat oleh Kasiko. Total Net Profit = Profit = pemasukan − semua pengeluaran.'],
   )
   return rows
 }

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { templateRows } from './apply-template'
-import { moveEntry, normalizeEntries, normalizeLayout, toggleEntry, visibleIds } from './config'
+import {
+  LAYOUT_VERSION,
+  moveEntry,
+  normalizeEntries,
+  normalizeLayout,
+  savedLayout,
+  toggleEntry,
+  visibleIds,
+} from './config'
 import { BUSINESS_TEMPLATES, findTemplate, normalizeLabel, suggestCategory } from './templates'
 
 const carWash = findTemplate('cuci-mobil')
@@ -114,8 +122,17 @@ describe('dashboard layout', () => {
   it('normalizes every template layout to the full set of widgets', () => {
     for (const template of BUSINESS_TEMPLATES) {
       const layout = normalizeLayout(template.dashboard)
-      expect(layout.kpis).toHaveLength(9)
-      expect(layout.panels).toHaveLength(7)
+      expect(layout.panels).toHaveLength(6)
+      expect(visibleIds(layout.panels)).toEqual(['trend', 'monthly', 'expenseMix'])
     }
+  })
+
+  it('starts a layout saved before the simplified dashboard over from the template', () => {
+    const template = normalizeLayout({ panels: [{ id: 'trend', visible: true }] })
+    const old = { panels: [{ id: 'busyHours' as const, visible: true }] }
+    expect(savedLayout(old, template)).toEqual(template)
+    expect(savedLayout(null, template)).toEqual(template)
+    const current = { version: LAYOUT_VERSION, panels: old.panels }
+    expect(visibleIds(savedLayout(current, template).panels)).toEqual(['busyHours'])
   })
 })

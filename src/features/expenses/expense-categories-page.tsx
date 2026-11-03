@@ -59,7 +59,7 @@ export function ExpenseCategoriesPage() {
   return (
     <OwnerPage
       title="Kategori Pengeluaran"
-      description="Jenis kategori menentukan cara pengeluaran dihitung di profit. Kategori yang sudah dipakai dinonaktifkan, bukan dihapus."
+      description="Jenis kategori memilah pengeluaran di Laporan. Kategori yang sudah dipakai dinonaktifkan, bukan dihapus."
       actions={
         <Button
           onClick={() =>
@@ -157,8 +157,8 @@ function ProfitFormula() {
         ))}
       </CardContent>
       <CardDescription className="border-t px-4 pt-3 text-xs">
-        Profit operasional = Pemasukan − Operasional · Profit bersih = Profit operasional −
-        Non-operasional · Arus kas bersih = Pemasukan − semua pengeluaran (termasuk prive)
+        Profit = Pemasukan − semua pengeluaran (semua jenis). Jenis dipakai untuk memilah
+        pengeluaran di Laporan.
       </CardDescription>
     </Card>
   )
@@ -336,7 +336,7 @@ function CategoryForm({
         </Field>
         {draft.id && kind !== draft.kind && (
           <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
-            Mengubah jenis ikut mengubah perhitungan profit untuk catatan lama di kategori ini.
+            Mengubah jenis ikut mengubah pemilahan catatan lama di kategori ini.
           </p>
         )}
         {error && <FieldError>{error}</FieldError>}

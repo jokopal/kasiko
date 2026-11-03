@@ -41,14 +41,14 @@ const BALANCES: BalanceInfo[] = [
     key: 'openingCash',
     label: 'Saldo awal kas',
     short: 'Saldo awal kas',
-    hint: 'Uang usaha yang siap dipakai saat mulai memakai Kasiko, termasuk modal laci. Titik awal kas bebas.',
+    hint: 'Uang usaha yang siap dipakai saat mulai memakai Kasiko, termasuk modal laci. Titik awal kas.',
     icon: WalletIcon,
   },
   {
     key: 'openingReserve',
     label: 'Uang dingin',
     short: 'Uang dingin',
-    hint: 'Simpanan yang tidak dipakai operasional. Menjadi saldo awal Dana Cadangan dan tidak dihitung sebagai kas bebas.',
+    hint: 'Simpanan yang tidak dipakai operasional. Menjadi saldo awal Dana Cadangan dan tidak dihitung sebagai kas.',
     icon: SnowflakeIcon,
   },
 ]

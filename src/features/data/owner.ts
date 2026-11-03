@@ -1,8 +1,5 @@
-import {
-  normalizeLayout,
-  type BusinessConfig,
-  type DashboardLayout,
-} from '@/features/business/config'
+import { savedLayout, type BusinessConfig, type DashboardLayout } from '@/features/business/config'
+import { findTemplate } from '@/features/business/templates'
 import {
   daysOfMonth,
   monthlyMatrix,
@@ -12,6 +9,7 @@ import {
   type MonthlyMatrix,
   type PeriodTotals,
 } from '@/features/reports/finance'
+import type { HistoricalLine } from '@/features/reports/summary'
 import { getSupabase } from '@/lib/supabase'
 import type {
   Business,
@@ -105,10 +103,7 @@ export async function fetchOwnerMaster(businessId: string): Promise<OwnerMaster>
     config: {
       businessId,
       templateId: configRow.template_id,
-      dashboard: normalizeLayout({
-        kpis: configRow.dashboard.kpis ?? [],
-        panels: configRow.dashboard.panels ?? [],
-      }),
+      dashboard: savedLayout(configRow.dashboard, findTemplate(configRow.template_id).dashboard),
       importMapping: configRow.import_mapping,
     },
     catalogCategories: rowsOf<CatalogCategoryRow>(categories).map(toCatalogCategory),
@@ -173,6 +168,52 @@ export async function fetchHistoricalDays(businessId: string): Promise<Historica
   )
   return rows.map(toHistoricalDay)
 }
+
+/** Imported income and expense lines for `[firstDayKey, lastDayKey]` (the Laporan tables). */
+export async function fetchHistoryRange(
+  businessId: string,
+  firstDayKey: string,
+  lastDayKey: string,
+): Promise<{
+  income: { dayKey: string; income: number }[]
+  expenses: HistoricalLine[]
+}> {
+  const db = getSupabase()
+  const [days, lines] = await Promise.all([
+    allPages<{ day_key: string; income: number }>((start, end) =>
+      db
+        .from('historical_days')
+        .select('day_key, income')
+        .eq('business_id', businessId)
+        .gte('day_key', firstDayKey)
+        .lte('day_key', lastDayKey)
+        .order('day_key')
+        .range(start, end),
+    ),
+    allPages<{ day_key: string; category_id: string; amount: number }>((start, end) =>
+      db
+        .from('historical_expenses')
+        .select('day_key, category_id, amount')
+        .eq('business_id', businessId)
+        .gte('day_key', firstDayKey)
+        .lte('day_key', lastDayKey)
+        .order('day_key')
+        .order('category_id')
+        .range(start, end),
+    ),
+  ])
+  return {
+    income: days.map((d) => ({ dayKey: d.day_key, income: d.income })),
+    expenses: lines.map((l) => ({
+      dayKey: l.day_key,
+      categoryId: l.category_id,
+      amount: l.amount,
+    })),
+  }
+}
+
+/** The very start of "cumulative": earlier than any record a business can hold. */
+export const BEGINNING_OF_RECORDS = new Date('2000-01-01T00:00:00Z')
 
 // --- SQL aggregates -------------------------------------------------------------------
 

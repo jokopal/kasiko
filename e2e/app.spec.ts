@@ -20,7 +20,14 @@ test('the login page offers cashier and owner sign-in', async ({ page }) => {
 })
 
 test('protected areas send signed-out visitors to login', async ({ page }) => {
-  for (const path of ['/kasir', '/kasir/pesanan', '/owner', '/owner/rekap', '/owner/diskon']) {
+  for (const path of [
+    '/kasir',
+    '/kasir/pesanan',
+    '/owner',
+    '/owner/laporan',
+    '/owner/rekap',
+    '/owner/diskon',
+  ]) {
     await page.goto(path)
     await expect(page).toHaveURL(/\/masuk$/)
   }

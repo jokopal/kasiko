@@ -1,12 +1,5 @@
-import {
-  ArrowDownRightIcon,
-  ArrowRightIcon,
-  ArrowUpRightIcon,
-  MinusIcon,
-  PencilLineIcon,
-  SlidersHorizontalIcon,
-} from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { ArrowRightIcon, PencilLineIcon, SlidersHorizontalIcon, TableIcon } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Bar, BarChart, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts'
@@ -20,25 +13,17 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
-import {
-  KPI_INFO,
-  PANEL_INFO,
-  visibleIds,
-  type KpiId,
-  type PanelId,
-} from '@/features/business/config'
-import { OpeningBalancesCard } from '@/features/business/opening-balances'
+import { PANEL_INFO, visibleIds, type PanelId } from '@/features/business/config'
 import { KindDot } from '@/features/expenses/kind'
 import { KIND_COLOR } from '@/features/expenses/kind-colors'
 import { PageLoading } from '@/components/page-loading'
 import {
+  BEGINNING_OF_RECORDS,
   fetchBusyHours,
   fetchDailyTotals,
   fetchExpenseByCategory,
-  fetchFreeCash,
   fetchMonthlyTotals,
   fetchPeriodTotals,
-  fetchReserveBalance,
   fetchTopItems,
 } from '@/features/data/owner'
 import { useOwnerData } from '@/features/data/owner-data'
@@ -55,14 +40,10 @@ import {
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { DashboardCustomizer } from './dashboard-customizer'
-import {
-  kindLookup,
-  monthKeysEnding,
-  percentChange,
-  type MonthPoint,
-  type PeriodTotals,
-} from './finance'
+import { kindLookup, monthKeysEnding, type MonthPoint, type PeriodTotals } from './finance'
 import { PeriodPicker } from './period-picker'
+import { SummaryCards } from './summary-cards'
+import { flowSummary, importedExpense } from './summary'
 import { usePeriod } from './use-period'
 
 // Series colors are fixed categorical slots (validated with the dataviz palette checker),
@@ -78,9 +59,9 @@ const trendConfig = {
 
 const monthlyConfig = {
   income: { label: 'Pemasukan', color: SERIES.income },
-  spend: { label: 'Pengeluaran usaha', color: SERIES.expense },
+  spend: { label: 'Pengeluaran', color: SERIES.expense },
   // Derived total in text ink, so it never borrows a categorical hue.
-  profit: { label: 'Profit bersih', color: 'var(--foreground)' },
+  profit: { label: 'Profit', color: 'var(--foreground)' },
 } satisfies ChartConfig
 
 const MONTHS_SHORT = [
@@ -113,26 +94,26 @@ export function DashboardPage() {
   const period = usePeriod(tz)
   const { range } = period
   const [customizing, setCustomizing] = useState(false)
+  const location = useLocation()
 
   // Every number comes from the database (AGENTS.md section 7), fetched in parallel.
   const query = useQuery({
     queryKey: keys.report(business.id, 'dashboard', period.firstDayKey, period.lastDayKey),
     queryFn: async () => {
       const id = business.id
-      const before = previousRange(range)
-      const [current, previous, reserve, cash, series, months, top, expenseMix, heat] =
-        await Promise.all([
-          fetchPeriodTotals(id, range.from, range.to),
-          fetchPeriodTotals(id, before.from, before.to),
-          fetchReserveBalance(id, range.to),
-          fetchFreeCash(id, range.to),
-          fetchDailyTotals(id, period.firstDayKey, period.lastDayKey),
-          fetchMonthlyTotals(id, monthKeysEnding(period.lastDayKey, 12)),
-          fetchTopItems(id, range.from, range.to, 6),
-          fetchExpenseByCategory(id, range.from, range.to),
-          fetchBusyHours(id, range.from, range.to),
-        ])
-      return { current, previous, reserve, freeCash: cash, series, months, top, expenseMix, heat }
+      const prior = previousRange(range)
+      const [current, previous, before, series, months, top, expenseMix, heat] = await Promise.all([
+        fetchPeriodTotals(id, range.from, range.to),
+        fetchPeriodTotals(id, prior.from, prior.to),
+        // Everything before the period: the base of the cumulative figures (#40).
+        fetchPeriodTotals(id, BEGINNING_OF_RECORDS, range.from),
+        fetchDailyTotals(id, period.firstDayKey, period.lastDayKey),
+        fetchMonthlyTotals(id, monthKeysEnding(period.lastDayKey, 12)),
+        fetchTopItems(id, range.from, range.to, 6),
+        fetchExpenseByCategory(id, range.from, range.to),
+        fetchBusyHours(id, range.from, range.to),
+      ])
+      return { current, previous, before, series, months, top, expenseMix, heat }
     },
   })
   const kindOf = useMemo(() => kindLookup(expenseCategories), [expenseCategories])
@@ -158,24 +139,7 @@ export function DashboardPage() {
     .filter((row) => otherIds.has(row.categoryId))
     .reduce((sum, row) => sum + row.amount, 0)
 
-  const kpiValue: Record<KpiId, { value: number; previous?: number; higherIsWorse?: boolean }> = {
-    income: { value: current.income, previous: previous.income },
-    expense: { value: current.expense, previous: previous.expense, higherIsWorse: true },
-    operatingProfit: { value: current.operatingProfit, previous: previous.operatingProfit },
-    profit: { value: current.profit, previous: previous.profit },
-    drawings: { value: current.drawings, previous: previous.drawings, higherIsWorse: true },
-    netCashFlow: { value: current.netCashFlow, previous: previous.netCashFlow },
-    reserve: { value: stats.reserve },
-    freeCash: { value: stats.freeCash },
-    discounts: {
-      value: current.discountTotal,
-      previous: previous.discountTotal,
-      higherIsWorse: true,
-    },
-  }
-
   const panels: Record<PanelId, () => ReactNode> = {
-    profitBreakdown: () => <ProfitBreakdown totals={current} />,
     trend: () => <DailyTrend series={stats.series} tz={tz} />,
     monthly: () => <MonthlyTrend months={stats.months} />,
     paymentMethods: () => (
@@ -214,10 +178,15 @@ export function DashboardPage() {
     paymentMethods: `${current.transactionCount} transaksi lunas${
       current.historicalIncome > 0 ? ' · data impor tanpa metode bayar' : ''
     }`,
-    expenseMix: `Laci ${formatRupiah(current.drawerExpense)} · Owner ${formatRupiah(current.ownerExpense)}`,
+    expenseMix: [
+      `Kasir ${formatRupiah(current.drawerExpense)}`,
+      `Owner ${formatRupiah(current.ownerExpense)}`,
+      ...(importedExpense(current) > 0
+        ? [`Data impor ${formatRupiah(importedExpense(current))}`]
+        : []),
+    ].join(' · '),
   }
 
-  const kpis = visibleIds(config.dashboard.kpis)
   const visiblePanels = visibleIds(config.dashboard.panels)
 
   return (
@@ -232,6 +201,12 @@ export function DashboardPage() {
       actions={
         <>
           <PeriodPicker period={period} />
+          <Button asChild variant="outline">
+            <Link to={`/owner/laporan${location.search}`}>
+              <TableIcon />
+              Laporan
+            </Link>
+          </Button>
           <Button variant="outline" onClick={() => setCustomizing(true)}>
             <SlidersHorizontalIcon />
             Sesuaikan
@@ -239,28 +214,14 @@ export function DashboardPage() {
         </>
       }
     >
-      {kpis.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-          {kpis.map((id) => {
-            const kpi = kpiValue[id]
-            return (
-              <Kpi
-                key={id}
-                label={KPI_INFO[id].label}
-                hint={KPI_INFO[id].hint}
-                value={kpi.value}
-                change={
-                  kpi.previous === undefined ? undefined : percentChange(kpi.value, kpi.previous)
-                }
-                higherIsWorse={kpi.higherIsWorse}
-                emphasis={id === 'profit'}
-              />
-            )
-          })}
-        </div>
-      )}
-
-      <OpeningBalancesCard business={business} />
+      <SummaryCards
+        summary={flowSummary(current, stats.before)}
+        previous={{
+          income: previous.income,
+          expense: previous.expense,
+          profit: previous.income - previous.expense,
+        }}
+      />
 
       {otherAmount > 0 && (
         <div className="flex flex-col gap-2 rounded-lg border bg-muted/40 p-3 text-sm sm:flex-row sm:items-center">
@@ -307,59 +268,6 @@ export function DashboardPage() {
         layout={config.dashboard}
       />
     </OwnerPage>
-  )
-}
-
-function Kpi({
-  label,
-  hint,
-  value,
-  change,
-  higherIsWorse = false,
-  emphasis = false,
-}: {
-  label: string
-  hint: string
-  value: number
-  change?: number | null
-  higherIsWorse?: boolean
-  emphasis?: boolean
-}) {
-  const direction = change === undefined || change === null ? 0 : Math.sign(Math.round(change))
-  const good = higherIsWorse ? direction < 0 : direction > 0
-  const Icon = direction > 0 ? ArrowUpRightIcon : direction < 0 ? ArrowDownRightIcon : MinusIcon
-  return (
-    <Card className={cn('gap-2 py-4', emphasis && 'ring-2 ring-primary/40')}>
-      <CardContent className="space-y-1 px-4">
-        <p className="text-sm text-muted-foreground" title={hint}>
-          {label}
-        </p>
-        <p
-          className={cn(
-            'text-2xl font-semibold tracking-tight tabular-nums',
-            value < 0 && 'text-destructive',
-          )}
-        >
-          {formatRupiah(value)}
-        </p>
-        {change !== undefined ? (
-          <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            <span
-              className={cn(
-                'inline-flex items-center gap-0.5 font-medium',
-                direction !== 0 && (good ? 'text-emerald-700' : 'text-red-700'),
-              )}
-            >
-              <Icon className="size-3.5" aria-hidden />
-              {change === null ? '—' : `${Math.abs(change).toFixed(0)}%`}
-            </span>
-            vs periode sebelumnya
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">{hint}</p>
-        )}
-      </CardContent>
-    </Card>
   )
 }
 
@@ -433,9 +341,9 @@ function MonthlyTrend({ months }: { months: MonthPoint[] }) {
   const rows = months.map((m) => ({
     monthKey: m.monthKey,
     income: m.income,
-    spend: m.operatingExpense + m.nonOperatingExpense,
-    profit: m.profit,
-    drawings: m.drawings,
+    spend: m.operatingExpense + m.nonOperatingExpense + m.drawings,
+    // Profit = income − every expense, prive included (decision #40).
+    profit: m.income - m.operatingExpense - m.nonOperatingExpense - m.drawings,
   }))
   if (rows.every((r) => r.income === 0 && r.spend === 0)) {
     return <p className="py-6 text-center text-sm text-muted-foreground">Belum ada data</p>
@@ -459,22 +367,14 @@ function MonthlyTrend({ months }: { months: MonthPoint[] }) {
                 const row = payload[0]?.payload as (typeof rows)[number] | undefined
                 return row ? monthLabel(row.monthKey) : ''
               }}
-              formatter={(value, name, item) => {
+              formatter={(value, name) => {
                 const key = name as keyof typeof monthlyConfig
-                const row = item.payload as (typeof rows)[number]
                 return (
-                  <div className="grid w-full gap-1">
-                    <TooltipRow
-                      color={monthlyConfig[key].color}
-                      label={monthlyConfig[key].label}
-                      value={Number(value)}
-                    />
-                    {key === 'profit' && row.drawings > 0 && (
-                      <p className="text-muted-foreground">
-                        Prive {formatRupiah(row.drawings)} tidak mengurangi profit
-                      </p>
-                    )}
-                  </div>
+                  <TooltipRow
+                    color={monthlyConfig[key].color}
+                    label={monthlyConfig[key].label}
+                    value={Number(value)}
+                  />
                 )
               }}
             />
@@ -517,78 +417,6 @@ function TooltipRow({ color, label, value }: { color: string; label: string; val
       </span>
       <span className="font-medium tabular-nums">{formatRupiah(value)}</span>
     </div>
-  )
-}
-
-/**
- * Income-statement waterfall as an HTML list: each deduction floats where it bites, each
- * subtotal starts at zero. Values are always printed, so the bars are never the only cue.
- */
-function ProfitBreakdown({ totals }: { totals: PeriodTotals }) {
-  const scale = Math.max(totals.income, totals.expense, 1)
-  type Step = { label: string; value: number; kind?: ExpenseKind; subtotal?: boolean }
-  const steps: Step[] = [
-    { label: 'Pemasukan', value: totals.income, subtotal: true },
-    { label: 'Biaya operasional', value: totals.operatingExpense, kind: 'operating' },
-    { label: 'Profit operasional', value: totals.operatingProfit, subtotal: true },
-    { label: 'Cicilan & aset', value: totals.nonOperatingExpense, kind: 'non_operating' },
-    { label: 'Profit bersih', value: totals.profit, subtotal: true },
-    { label: 'Prive', value: totals.drawings, kind: 'drawing' },
-    { label: 'Arus kas bersih', value: totals.netCashFlow, subtotal: true },
-  ]
-  let running = 0
-  const clamp = (v: number) => Math.min(Math.max(v / scale, 0), 1) * 100
-  return (
-    <ul className="space-y-2.5">
-      {steps.map((step) => {
-        let left: number
-        let width: number
-        if (step.subtotal) {
-          running = step.value
-          left = 0
-          width = clamp(step.value)
-        } else {
-          left = clamp(running - step.value)
-          width = clamp(running) - left
-          running -= step.value
-        }
-        const share = totals.income > 0 ? Math.round((step.value / totals.income) * 100) : null
-        return (
-          <li key={step.label} className="space-y-1">
-            <div className="flex items-baseline justify-between gap-3 text-sm">
-              <span
-                className={cn('flex items-center gap-1.5 truncate', step.subtotal && 'font-medium')}
-              >
-                {step.kind && <KindDot kind={step.kind} />}
-                {step.subtotal ? step.label : `− ${step.label}`}
-              </span>
-              <span
-                className={cn(
-                  'shrink-0 tabular-nums',
-                  step.subtotal && 'font-semibold',
-                  step.subtotal && step.value < 0 && 'text-destructive',
-                )}
-              >
-                {share !== null && step.label !== 'Pemasukan' && (
-                  <span className="mr-2 text-xs font-normal text-muted-foreground">{share}%</span>
-                )}
-                {formatRupiah(step.value)}
-              </span>
-            </div>
-            <div className="relative h-2 rounded-full bg-muted" aria-hidden>
-              <div
-                className="absolute inset-y-0 rounded-full"
-                style={{
-                  left: `${left}%`,
-                  width: `${Math.max(width, step.value === 0 ? 0 : 0.8)}%`,
-                  backgroundColor: step.kind ? KIND_COLOR[step.kind] : SERIES.income,
-                }}
-              />
-            </div>
-          </li>
-        )
-      })}
-    </ul>
   )
 }
 
@@ -638,7 +466,9 @@ function ExpenseMix({
       </ul>
       <BarList rows={rows} />
       {more > 0 && (
-        <p className="text-xs text-muted-foreground">+{more} kategori lain di Rekap Bulanan</p>
+        <p className="text-xs text-muted-foreground">
+          +{more} kategori lain di Laporan → Per Kategori
+        </p>
       )}
     </div>
   )

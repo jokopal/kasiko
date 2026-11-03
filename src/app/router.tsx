@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType, type ReactNode } from 'react'
-import { createBrowserRouter, type RouteObject } from 'react-router-dom'
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom'
 import { KasirLayout } from '@/features/pos/kasir-layout'
 import { PosPage } from '@/features/pos/pos-page'
 import type { Role } from '@/lib/types'
@@ -66,9 +66,11 @@ export const routes: RouteObject[] = [
             element: page(() => import('@/features/reports/dashboard-page'), 'DashboardPage'),
           },
           {
-            path: 'rekap',
-            element: page(() => import('@/features/reports/monthly-page'), 'MonthlyPage'),
+            path: 'laporan',
+            element: page(() => import('@/features/reports/report-page'), 'ReportPage'),
           },
+          // Rekap Bulanan became the Laporan "Bulanan" tab (decision #41).
+          { path: 'rekap', element: <Navigate to="/owner/laporan?tab=bulanan" replace /> },
           {
             path: 'transaksi',
             element: page(() => import('@/features/reports/transactions-page'), 'TransactionsPage'),

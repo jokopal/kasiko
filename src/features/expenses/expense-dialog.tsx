@@ -230,7 +230,9 @@ function ExpenseForm({
               </SelectContent>
             </Select>
             {selected?.kind === 'drawing' && (
-              <FieldDescription>Prive tidak mengurangi profit, hanya kas.</FieldDescription>
+              <FieldDescription>
+                Prive tetap dihitung sebagai pengeluaran dan mengurangi profit.
+              </FieldDescription>
             )}
           </Field>
         )}

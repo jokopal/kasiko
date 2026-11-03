@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
 import {
-  KPI_INFO,
   moveEntry,
   PANEL_INFO,
   toggleEntry,
@@ -46,16 +45,11 @@ export function DashboardCustomizer({
         <SheetHeader className="border-b">
           <SheetTitle>Sesuaikan dashboard</SheetTitle>
           <SheetDescription>
-            Berlaku untuk usaha ini saja. Perubahan langsung tersimpan.
+            Pemasukan, Pengeluaran, dan Profit selalu tampil di atas. Atur panel di bawahnya;
+            berlaku untuk usaha ini saja dan langsung tersimpan.
           </SheetDescription>
         </SheetHeader>
         <div className="flex-1 space-y-6 overflow-y-auto p-4">
-          <EntryList
-            title="Angka utama"
-            entries={layout.kpis}
-            info={KPI_INFO}
-            onChange={(kpis) => save({ kpis })}
-          />
           <EntryList
             title="Panel"
             entries={layout.panels}

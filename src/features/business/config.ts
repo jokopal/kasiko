@@ -3,33 +3,23 @@
 // layout, and the remembered spreadsheet-label → category mapping for imports.
 // Owner-only: never cached on the cashier device.
 
-export type KpiId =
-  | 'income'
-  | 'expense'
-  | 'operatingProfit'
-  | 'profit'
-  | 'drawings'
-  | 'netCashFlow'
-  | 'reserve'
-  | 'freeCash'
-  | 'discounts'
-
 export type PanelId =
-  | 'profitBreakdown'
-  | 'trend'
-  | 'monthly'
-  | 'paymentMethods'
-  | 'topItems'
-  | 'expenseMix'
-  | 'busyHours'
+  'trend' | 'monthly' | 'paymentMethods' | 'topItems' | 'expenseMix' | 'busyHours'
 
 export interface LayoutEntry<T extends string> {
   id: T
   visible: boolean
 }
 
+/**
+ * Version 2 (decision #40): the summary cards are fixed, only the panels below them are
+ * arranged. A layout saved by version 1 (with its own KPI list) starts over from the
+ * template, so every business gets the simplified dashboard once.
+ */
+export const LAYOUT_VERSION = 2
+
 export interface DashboardLayout {
-  kpis: LayoutEntry<KpiId>[]
+  version: number
   panels: LayoutEntry<PanelId>[]
 }
 
@@ -41,26 +31,7 @@ export interface BusinessConfig {
   importMapping: Record<string, string>
 }
 
-export const KPI_INFO: Record<KpiId, { label: string; hint: string }> = {
-  income: { label: 'Pemasukan', hint: 'Total transaksi lunas' },
-  expense: { label: 'Pengeluaran', hint: 'Semua pengeluaran, termasuk prive' },
-  operatingProfit: {
-    label: 'Profit operasional',
-    hint: 'Pemasukan − biaya operasional',
-  },
-  profit: { label: 'Profit bersih', hint: 'Profit operasional − cicilan & aset' },
-  drawings: { label: 'Prive', hint: 'Uang diambil owner/keluarga' },
-  netCashFlow: { label: 'Arus kas bersih', hint: 'Pemasukan − semua pengeluaran' },
-  reserve: { label: 'Saldo cadangan', hint: 'Per akhir periode' },
-  freeCash: { label: 'Kas bebas', hint: 'Per akhir periode' },
-  discounts: { label: 'Diskon diberikan', hint: 'Potongan harga pada transaksi lunas' },
-}
-
 export const PANEL_INFO: Record<PanelId, { label: string; hint: string }> = {
-  profitBreakdown: {
-    label: 'Alur profit',
-    hint: 'Dari pemasukan sampai arus kas bersih',
-  },
   trend: { label: 'Tren harian', hint: 'Pemasukan dan pengeluaran per hari' },
   monthly: { label: 'Tren bulanan', hint: '12 bulan terakhir, termasuk data impor' },
   paymentMethods: { label: 'Metode pembayaran', hint: 'Tunai, QRIS, Transfer' },
@@ -69,7 +40,6 @@ export const PANEL_INFO: Record<PanelId, { label: string; hint: string }> = {
   busyHours: { label: 'Jam & hari tersibuk', hint: 'Jumlah transaksi per jam' },
 }
 
-export const KPI_IDS = Object.keys(KPI_INFO) as KpiId[]
 export const PANEL_IDS = Object.keys(PANEL_INFO) as PanelId[]
 
 /**
@@ -90,11 +60,17 @@ export function normalizeEntries<T extends string>(
   return [...kept, ...all.filter((id) => !seen.has(id)).map((id) => ({ id, visible: false }))]
 }
 
-export function normalizeLayout(layout: DashboardLayout): DashboardLayout {
-  return {
-    kpis: normalizeEntries(layout.kpis, KPI_IDS),
-    panels: normalizeEntries(layout.panels, PANEL_IDS),
-  }
+export function normalizeLayout(layout: Pick<DashboardLayout, 'panels'>): DashboardLayout {
+  return { version: LAYOUT_VERSION, panels: normalizeEntries(layout.panels, PANEL_IDS) }
+}
+
+/** The saved layout, or the template's when it was saved by an older version. */
+export function savedLayout(
+  saved: { version?: number; panels?: LayoutEntry<PanelId>[] } | null | undefined,
+  template: DashboardLayout,
+): DashboardLayout {
+  const current = saved?.version === LAYOUT_VERSION && saved.panels ? saved : template
+  return normalizeLayout({ panels: current.panels ?? [] })
 }
 
 /** Moves the entry with `id` one step up (−1) or down (+1). */

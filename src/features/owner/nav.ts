@@ -25,7 +25,7 @@ export const OWNER_NAV: { label: string; items: OwnerNavItem[] }[] = [
     label: 'Monitor',
     items: [
       { to: '/owner', label: 'Dashboard', icon: LayoutDashboardIcon },
-      { to: '/owner/rekap', label: 'Rekap Bulanan', icon: TableIcon },
+      { to: '/owner/laporan', label: 'Laporan', icon: TableIcon },
       { to: '/owner/transaksi', label: 'Transaksi', icon: ReceiptTextIcon },
     ],
   },

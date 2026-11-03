@@ -17,7 +17,7 @@ import {
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { OpeningBalancesDialog } from '@/features/business/opening-balances'
+import { OpeningBalancesCard, OpeningBalancesDialog } from '@/features/business/opening-balances'
 import { fetchFreeCash, fetchReserveBalance, fetchReserveMovements } from '@/features/data/owner'
 import { addReserveMovement } from '@/features/data/owner-actions'
 import { useOwnerData } from '@/features/data/owner-data'
@@ -77,21 +77,25 @@ export function ReservePage() {
         </Card>
         <Card>
           <CardContent className="space-y-1">
-            <p className="text-sm text-muted-foreground">Kas bebas</p>
+            <p className="text-sm text-muted-foreground">Kas</p>
             <p className="text-3xl font-bold tracking-tight tabular-nums">{formatRupiah(free)}</p>
             <p className="text-xs text-muted-foreground">
-              Saldo awal + pemasukan − pengeluaran − setoran dari kas + penarikan
+              Saldo awal kas + pemasukan − pengeluaran − setoran dari kas + penarikan
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Dihitung sejak Kasiko dipakai, tanpa data impor Excel — karena itu bisa berbeda dari
+              profit kumulatif.
             </p>
           </CardContent>
         </Card>
       </div>
 
+      <OpeningBalancesCard business={business} />
+
       <Card>
         <CardHeader>
           <CardTitle>Riwayat</CardTitle>
-          <CardDescription>
-            Setoran dari modal baru owner tidak mengurangi kas bebas.
-          </CardDescription>
+          <CardDescription>Setoran dari modal baru owner tidak mengurangi kas.</CardDescription>
         </CardHeader>
         <CardContent>
           <ul className="divide-y">
@@ -219,7 +223,7 @@ function MovementForm({
         <DialogDescription>
           {type === 'deposit'
             ? 'Pilih asal uangnya: dari kas usaha atau modal baru owner.'
-            : `Saldo tersedia ${formatRupiah(balance)}. Uang kembali ke kas bebas.`}
+            : `Saldo tersedia ${formatRupiah(balance)}. Uang kembali ke kas.`}
         </DialogDescription>
       </DialogHeader>
       <FieldGroup>
