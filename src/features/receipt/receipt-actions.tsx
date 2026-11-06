@@ -1,4 +1,10 @@
-import { BluetoothIcon, LoaderCircleIcon, MessageCircleIcon, PrinterIcon } from 'lucide-react'
+import {
+  BluetoothIcon,
+  LoaderCircleIcon,
+  MessageCircleIcon,
+  PrinterIcon,
+  UsbIcon,
+} from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -14,14 +20,16 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/input'
 import type { Transaction } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { isBluetoothSupported, printBytes } from './bluetooth-printer'
 import { printInBrowser } from './browser-print'
 import { encodeReceipt } from './escpos'
 import { formatReceipt, receiptToText, type ReceiptBusiness } from './format-receipt'
+import { canPrintDirectly, printDirect } from './printer'
+import { PrinterNotSetUpError } from './printer-error'
 import { printerSettings } from './printer-settings'
+import { openPrinterSetup } from './printer-setup'
 import { normalizeWhatsAppNumber, whatsAppReceiptMessage, whatsAppUrl } from './whatsapp'
 
-/** Bluetooth / browser print / WhatsApp for one transaction. Works offline too. */
+/** Direct print (USB/Bluetooth/RawBT) / browser print / WhatsApp. Works offline too. */
 export function ReceiptActions({
   transaction,
   business,
@@ -29,19 +37,31 @@ export function ReceiptActions({
   transaction: Transaction
   business: ReceiptBusiness
 }) {
-  const { paperWidth } = printerSettings.useValue()
+  const { paperWidth, method } = printerSettings.useValue()
   const [printing, setPrinting] = useState(false)
   const [whatsAppOpen, setWhatsAppOpen] = useState(false)
-  const hasBluetooth = isBluetoothSupported()
+  const direct = canPrintDirectly()
   const lines = () => formatReceipt(transaction, business, paperWidth)
+  const DirectIcon = method === 'usb' ? UsbIcon : BluetoothIcon
 
-  async function printBluetooth() {
+  async function printNow() {
+    // No printer yet: walk the cashier through the setup instead of failing.
+    if (!method) {
+      openPrinterSetup()
+      return
+    }
     setPrinting(true)
     try {
-      await printBytes(encodeReceipt(lines()))
-      toast.success('Nota dicetak')
+      await printDirect(encodeReceipt(lines()))
+      // RawBT prints in its own app; Kasiko cannot tell whether it worked.
+      if (method !== 'rawbt') toast.success('Nota dicetak')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Gagal mencetak')
+      if (error instanceof PrinterNotSetUpError) openPrinterSetup()
+      else {
+        toast.error(error instanceof Error ? error.message : 'Gagal mencetak', {
+          action: { label: 'Atur printer', onClick: openPrinterSetup },
+        })
+      }
     } finally {
       setPrinting(false)
     }
@@ -49,18 +69,18 @@ export function ReceiptActions({
 
   return (
     <>
-      <div className={cn('grid gap-2', hasBluetooth ? 'grid-cols-3' : 'grid-cols-2')}>
-        {hasBluetooth && (
+      <div className={cn('grid gap-2', direct ? 'grid-cols-3' : 'grid-cols-2')}>
+        {direct && (
           <Button
             variant="outline"
             className="h-14 flex-col gap-1 text-xs"
             disabled={printing}
-            onClick={() => void printBluetooth()}
+            onClick={() => void printNow()}
           >
             {printing ? (
               <LoaderCircleIcon className="size-5 animate-spin" />
             ) : (
-              <BluetoothIcon className="size-5" />
+              <DirectIcon className="size-5" />
             )}
             Cetak
           </Button>

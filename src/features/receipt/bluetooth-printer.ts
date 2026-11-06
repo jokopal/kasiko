@@ -1,9 +1,13 @@
 import { chunk } from './escpos'
+import { PrinterError } from './printer-error'
+import { setPrinterLink } from './printer-link'
 import { printerSettings } from './printer-settings'
+
+export { PrinterError }
 
 // Web Bluetooth transport for BLE thermal printers (Chrome on Android, Chrome/Edge on
 // desktop; not available on iOS). Bluetooth Classic (SPP) printers cannot be reached
-// from a browser at all — the printer must support BLE.
+// from a browser at all; those print through the RawBT app (rawbt.ts, decision #42).
 
 /** GATT services used by common BLE receipt printers. */
 const PRINTER_SERVICES: BluetoothServiceUUID[] = [
@@ -19,8 +23,6 @@ const PRINTER_SERVICES: BluetoothServiceUUID[] = [
 /** Default ATT MTU leaves 20 bytes per write; safe for every printer. */
 const CHUNK_SIZE = 20
 
-export class PrinterError extends Error {}
-
 interface Connection {
   device: BluetoothDevice
   characteristic: BluetoothRemoteGATTCharacteristic
@@ -30,6 +32,24 @@ let connection: Connection | null = null
 
 export function isBluetoothSupported(): boolean {
   return typeof navigator !== 'undefined' && 'bluetooth' in navigator
+}
+
+/** Whether the tablet's Bluetooth radio is on; true where the browser cannot tell. */
+export async function isBluetoothOn(): Promise<boolean> {
+  if (!isBluetoothSupported() || typeof navigator.bluetooth.getAvailability !== 'function') {
+    return true
+  }
+  return navigator.bluetooth.getAvailability().catch(() => true)
+}
+
+/** Follows the radio being switched on and off; returns the unsubscribe. */
+export function watchBluetooth(onChange: (on: boolean) => void): () => void {
+  if (!isBluetoothSupported()) return () => undefined
+  const handle = () => void isBluetoothOn().then(onChange)
+  const { bluetooth } = navigator
+  bluetooth.addEventListener('availabilitychanged', handle)
+  handle()
+  return () => bluetooth.removeEventListener('availabilitychanged', handle)
 }
 
 /** "Nothing there" is an answer while probing, not a failure of the whole search. */
@@ -48,7 +68,7 @@ async function findWritableCharacteristic(
     }
   }
   throw new PrinterError(
-    'Perangkat ini tidak bisa dicetak lewat Bluetooth. Pakai Print atau WhatsApp.',
+    'Perangkat ini tidak bisa dicetak lewat Bluetooth langsung. Pakai cara Bluetooth klasik (RawBT).',
   )
 }
 
@@ -64,21 +84,32 @@ async function connect(device: BluetoothDevice): Promise<Connection> {
   const server = device.gatt.connected ? device.gatt : await device.gatt.connect()
   const characteristic = await findWritableCharacteristic(server)
   device.addEventListener('gattserverdisconnected', () => {
-    if (connection?.device === device) connection = null
+    if (connection?.device !== device) return
+    connection = null
+    setPrinterLink({ bleConnected: false })
   })
   connection = { device, characteristic }
-  printerSettings.set({ deviceId: device.id, deviceName: device.name ?? 'Printer' })
+  printerSettings.set({
+    method: 'ble',
+    deviceId: device.id,
+    deviceName: device.name ?? 'Printer',
+    usb: null,
+  })
+  setPrinterLink({ bleConnected: true })
   return connection
 }
 
 function describe(error: unknown): PrinterError {
   if (error instanceof PrinterError) return error
   if (error instanceof DOMException) {
-    if (error.name === 'NotFoundError') return new PrinterError('Pemilihan printer dibatalkan')
+    if (error.name === 'NotFoundError') {
+      return new PrinterError('Pemilihan printer dibatalkan')
+    }
     if (error.name === 'SecurityError' || error.name === 'NotAllowedError') {
       return new PrinterError('Izin Bluetooth ditolak browser')
     }
     if (error.name === 'NetworkError') {
+      setPrinterLink({ bleConnected: false })
       return new PrinterError('Printer tidak terjangkau. Pastikan printer menyala dan dekat.')
     }
   }
@@ -133,5 +164,16 @@ export async function printBytes(bytes: Uint8Array<ArrayBuffer>): Promise<void> 
 export function forgetPrinter() {
   connection?.device.gatt?.disconnect()
   connection = null
+  setPrinterLink({ bleConnected: false })
   printerSettings.set({ deviceId: null, deviceName: null })
+}
+
+/** Connects to the saved BLE printer now (setup "Sambungkan"), without printing. */
+export async function reconnectPrinter(): Promise<string> {
+  try {
+    const { device } = await ensureConnection()
+    return device.name ?? 'Printer'
+  } catch (error) {
+    throw describe(error)
+  }
 }

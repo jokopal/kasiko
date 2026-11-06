@@ -8,7 +8,7 @@ import {
   ShoppingCartIcon,
   WalletIcon,
 } from 'lucide-react'
-import { Suspense, useState } from 'react'
+import { Suspense } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { BusinessLogo } from '@/components/business-logo'
 import { PageLoading } from '@/components/page-loading'
@@ -25,7 +25,9 @@ import { signOut, useSession } from '@/features/auth/session'
 import { useBrandTheme } from '@/features/business/use-brand-theme'
 import { promptInstall, useCanInstall } from '@/features/offline/install-prompt'
 import { SyncStatus } from '@/features/offline/sync-status'
-import { PrinterSettingsDialog } from '@/features/receipt/printer-settings-dialog'
+import { PrinterSetup } from '@/features/receipt/printer-settings-dialog'
+import { openPrinterSetup } from '@/features/receipt/printer-setup'
+import { PrinterStatusChip } from '@/features/receipt/printer-status-chip'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { CartProvider } from './cart-provider'
@@ -52,7 +54,6 @@ export function KasirLayout() {
 function KasirShell() {
   const { business, device, outbox, openOrders } = useKasirData()
   const navigate = useNavigate()
-  const [printerOpen, setPrinterOpen] = useState(false)
   const canInstall = useCanInstall()
   useBrandTheme(business.primaryColor)
 
@@ -78,6 +79,7 @@ function KasirShell() {
               <p className="truncate text-xs opacity-80">Kasir</p>
             </div>
             <SyncStatus entries={outbox} />
+            <PrinterStatusChip />
             <nav aria-label="Menu kasir" className="flex items-center gap-1">
               {NAV.map(({ to, label, icon: Icon, end }) => (
                 <NavLink
@@ -127,7 +129,7 @@ function KasirShell() {
                     Pasang aplikasi
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem onSelect={() => setPrinterOpen(true)}>
+                <DropdownMenuItem onSelect={openPrinterSetup}>
                   <PrinterIcon />
                   Pengaturan printer
                 </DropdownMenuItem>
@@ -144,11 +146,7 @@ function KasirShell() {
             <Outlet />
           </Suspense>
         </main>
-        <PrinterSettingsDialog
-          open={printerOpen}
-          onOpenChange={setPrinterOpen}
-          business={business}
-        />
+        <PrinterSetup business={business} />
       </div>
     </CartProvider>
   )

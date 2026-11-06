@@ -5,6 +5,7 @@ import type { Transaction } from '@/lib/types'
 import { forgetPrinter, pairPrinter, printBytes, PrinterError } from './bluetooth-printer'
 import { encodeReceipt } from './escpos'
 import { formatReceipt, PAPER_CHARS } from './format-receipt'
+import { printerSettings } from './printer-settings'
 import { ReceiptActions } from './receipt-actions'
 
 const business = {
@@ -196,7 +197,7 @@ describe('printing a receipt over BLE on 58 mm paper', () => {
 describe('when the printer cannot be used', () => {
   it('says so when a chosen device exposes no known print service', async () => {
     fakePrinter({ services: [] })
-    await expect(pairPrinter()).rejects.toThrow(/Print atau WhatsApp/)
+    await expect(pairPrinter()).rejects.toThrow(/RawBT/)
   })
 
   it('says the chooser was closed', async () => {
@@ -219,6 +220,7 @@ describe('when the printer cannot be used', () => {
 describe('the Cetak button', () => {
   it('sends the receipt the screen shows and stays usable afterwards', async () => {
     const printer = fakePrinter({})
+    printerSettings.set({ method: 'ble' })
     render(<ReceiptActions transaction={transaction} business={business} />)
     const button = screen.getByRole('button', { name: 'Cetak' })
     await userEvent.click(button)

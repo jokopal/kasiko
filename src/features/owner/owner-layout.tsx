@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/button'
 import { selectBusiness, signOut, useSession } from '@/features/auth/session'
 import { AddBusinessDialog } from '@/features/business/add-business-dialog'
 import { useBrandTheme } from '@/features/business/use-brand-theme'
+import { PrinterSetup } from '@/features/receipt/printer-settings-dialog'
 import { useOnlineStatus } from '@/features/offline/use-online-status'
 import { useOwnerBusinesses, useOwnerData } from '@/features/data/owner-data'
 import { OwnerDataProvider } from '@/features/data/owner-data-provider'
@@ -83,6 +84,7 @@ function OwnerShell() {
     <SidebarProvider defaultOpen={startExpanded()}>
       <OwnerSidebar current={business} onAddBusiness={() => setAdding(true)} />
       <AddBusinessDialog open={adding} onOpenChange={setAdding} />
+      <PrinterSetup business={business} />
       <SidebarInset className="min-w-0">
         <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur md:px-4">
           <SidebarTrigger className="size-9" />

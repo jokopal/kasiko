@@ -168,6 +168,12 @@ Nomor dipertahankan karena dirujuk di kode dan migrasi. Bila dua keputusan berte
 | 40 | Ringkasan sederhana | Dana dibagi empat: **Pemasukan, Pengeluaran, Profit, Kas**. **Profit = Pemasukan − semua pengeluaran** (prive & cicilan ikut; menggantikan tingkatan profit #24 di semua tampilan, `kind` tetap untuk memilah). Pengeluaran punya dua pintu: **Kasir** (laci) dan **Owner**; pengeluaran impor Excel tampil sebagai baris **Data impor**. Dashboard hanya menampilkan tiga kartu (Pemasukan, Pengeluaran, Profit), masing-masing **periode ini** dan **kumulatif sejak data pertama** (termasuk impor) dengan angka "sebelum periode" (kumulatif = sebelum + periode). **Kas** (saldo awal kas, modal) hanya di **Dana Cadangan**. Panel bawaan di bawah kartu: Tren harian, Tren bulanan, Komposisi pengeluaran; panel lain bisa dinyalakan. Tata letak versi lama di-reset sekali ke template (`LAYOUT_VERSION = 2`). Tidak mengubah SQL: angka dari `period_totals`. |
 | 41 | Halaman Laporan | `/owner/laporan` menggantikan Rekap Bulanan (`/owner/rekap` dialihkan). Tab: **Ringkasan** (sebelum / periode / kumulatif per pintu), **Harian** (pintu + profit kumulatif), **Pemasukan**, **Pengeluaran** (kategori, jenis, pintu, keterangan), **Per Kategori**, dan **Bulanan (format Excel)** (#28, tetap bisa diimpor balik). Satu model tabel (`report-tables.ts`) dipakai layar, Excel, dan PDF. Ekspor: **Excel** satu sheet per tab, **PDF** A4 mendatar (jsPDF + autotable, dimuat saat ekspor, tidak di-precache kasir). |
 
+### Keputusan tambahan (2026-11-06)
+
+| # | Topik | Keputusan |
+|---|-------|-----------|
+| 42 | Cetak langsung: USB, Bluetooth, RawBT | Melengkapi #5 untuk tablet Android. Tombol **Cetak** memakai cara yang disimpan per perangkat: **Kabel USB** (WebUSB lewat OTG, paling stabil, disarankan), **Bluetooth** (BLE via Web Bluetooth), atau **Bluetooth klasik lewat aplikasi RawBT** (intent Android; untuk printer SPP yang tidak terjangkau browser). Pengaturan printer berupa **prosedur bertahap**: pilih cara → daftar periksa + deteksi (printer USB yang sudah diizinkan, Bluetooth tablet mati/menyala) → cari/pairing → **tes cetak + konfirmasi "kertas keluar?"** dengan panduan perbaikan. Header kasir menampilkan status printer (siap / tersambung saat mencetak / kabel tidak terdeteksi / belum diatur) dan notifikasi saat kabel USB dicolok/dicabut. Cetak tanpa printer tersimpan membuka pengaturan. Pengaturan lama (v1, BLE) dipindahkan otomatis. Print browser & WhatsApp tetap. |
+
 ---
 
 ## 6. Arsitektur & stack
@@ -328,7 +334,8 @@ Legenda: ✅ selesai & teruji · 🟡 ada tetapi belum teruji penuh / belum live
 | Login & peran memakai Supabase Auth | ✅ | owner (email) & kasir (nama pengguna); sesi tersimpan untuk kasir offline |
 | Data aplikasi dari database | ✅ | mode pratinjau **dihapus** (#23); kasir via RPC + outbox, owner via RLS/RPC + TanStack Query |
 | Bayar di akhir (pesanan) & diskon | ✅ | migrasi `0600` live di produksi (2026-10-25) |
-| Kasir: POS, bayar, nota (print/WA), riwayat, ringkasan, batal, pengeluaran laci | 🟡 | tersambung ke RPC; alur tulis belum diuji E2E terhadap database (menunggu staging, #20); cetak BLE teruji sampai byte ke printer tiruan, **belum diuji di DT-58D fisik** |
+| Kasir: POS, bayar, nota (print/WA), riwayat, ringkasan, batal, pengeluaran laci | 🟡 | tersambung ke RPC; alur tulis belum diuji E2E terhadap database (menunggu staging, #20) |
+| Cetak langsung USB / Bluetooth / RawBT + prosedur pengaturan (#42) | 🟡 | teruji sampai byte ke printer USB & BLE tiruan, prosedur diuji di browser; **belum diuji di tablet Android + DT-58D fisik** |
 | Offline: outbox, sync, registrasi perangkat, PWA | 🟡 | transport & registrasi ke RPC; offline→online teruji dengan transport tiruan, E2E nyata siap di `e2e-live/` (menunggu staging) |
 | Owner Monitor: dashboard, laporan, transaksi + ekspor | ✅ | angka dari fungsi SQL; ekspor Excel/CSV transaksi |
 | Ringkasan sederhana & Laporan bertab (#40, #41) | ✅ | diuji di browser terhadap data produksi (hanya baca): tab, Excel 5 sheet, PDF 15 halaman, Ringkasan = Harian = SQL |
@@ -384,7 +391,7 @@ Yang **masih terbuka** (tanyakan sebelum fitur terkait dikerjakan):
 | # | Pertanyaan | Dibutuhkan untuk |
 |---|------------|------------------|
 | 2 | Perangkat kasir Saimara: Android, iPhone/iPad, atau laptop? (iOS tidak bisa cetak Bluetooth langsung.) | R3, R6 |
-| 3 | Printer: **Digit Up DT-58D**, 58 mm, 9V/2A, label "windows+android+ios". **Belum pasti BLE** — Web Bluetooth tidak bisa ke Bluetooth Classic (SPP). Uji di Chrome Android: Pengaturan printer → Hubungkan → Tes cetak. | R6 |
+| 3 | Printer: **Digit Up DT-58D**, 58 mm, 9V/2A, kabel USB terlihat di foto. Jenis Bluetooth belum pasti (self-test: tahan FEED sambil menyalakan). Uji di tablet Android (Chrome): Pengaturan printer → **Kabel USB** dulu; bila gagal → Bluetooth → RawBT (#42). | R6 |
 | 5 | Daftar layanan & harga Saimara (owner membangun sendiri, #31) — kapan siap? | Go-live |
 | 6 | Logo & warna Saimara. | R2 |
 | 7 | Zona waktu Saimara (WIB/WITA/WIT) — menentukan batas "hari ini". Saat ini WIB. | R1 |
