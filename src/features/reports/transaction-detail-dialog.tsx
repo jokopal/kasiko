@@ -9,6 +9,7 @@ import {
 import { ReceiptDetail } from '@/features/receipt/receipt-detail'
 import { deviceCodeOf } from '@/features/receipt/receipt-number'
 import { formatDateTime } from '@/lib/datetime'
+import { formatRupiah } from '@/lib/money'
 import type { Business, Transaction } from '@/lib/types'
 
 /** One transaction for the owner: the receipt as the customer got it, plus its record. */
@@ -48,6 +49,7 @@ function TransactionRecord({
 }) {
   const { receiptNo, receivedAt, status, orderId, voidedAt, voidReason } = transaction
   const code = deviceCodeOf(receiptNo)
+  const edited = editedLines(transaction)
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
       <dt className="text-muted-foreground">Status</dt>
@@ -78,6 +80,27 @@ function TransactionRecord({
           <dd className="text-right text-destructive">{voidReason}</dd>
         </>
       )}
+      {edited.length > 0 && (
+        <>
+          <dt className="text-muted-foreground">Harga diubah di nota</dt>
+          <dd className="space-y-0.5 text-right">
+            {edited.map((item) => (
+              <p key={item.id} className="text-amber-700 tabular-nums dark:text-amber-400">
+                {item.nameSnapshot}:{' '}
+                <span className="line-through">{formatRupiah(item.catalogPrice ?? 0)}</span> →{' '}
+                {formatRupiah(item.priceSnapshot)}
+              </p>
+            ))}
+          </dd>
+        </>
+      )}
     </dl>
+  )
+}
+
+/** Lines sold at another price than the catalog had when the sale arrived (decision #44). */
+function editedLines(transaction: Transaction) {
+  return transaction.items.filter(
+    (item) => typeof item.catalogPrice === 'number' && item.catalogPrice !== item.priceSnapshot,
   )
 }

@@ -15,6 +15,8 @@ export type CartAction =
   | { type: 'increment'; itemId: string }
   | { type: 'decrement'; itemId: string }
   | { type: 'remove'; itemId: string }
+  /** Price of one line on this receipt only; the catalog stays as it is (decision #44). */
+  | { type: 'setPrice'; itemId: string; price: number }
   | { type: 'clear' }
   /** Replace the cart with the lines of an open order (decision #34). */
   | { type: 'load'; lines: CartLine[] }
@@ -41,6 +43,11 @@ export function cartReducer(lines: CartLine[], action: CartAction): CartLine[] {
       return changeQty(lines, action.itemId, -1)
     case 'remove':
       return lines.filter((line) => line.itemId !== action.itemId)
+    case 'setPrice':
+      assertRupiah(action.price)
+      return lines.map((line) =>
+        line.itemId === action.itemId ? { ...line, price: action.price } : line,
+      )
     case 'clear':
       return []
     case 'load':

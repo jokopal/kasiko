@@ -1,9 +1,9 @@
--- Vehicles per day (decision #43), cashier price edits (#44), imported Olsera item sales
+-- Vehicles per day (decision #43), the receipt price-edit switch (#44), imported Olsera item sales
 -- (#45) and the cashier password vault (#46). The vehicle cases match
 -- src/features/reports/daily-stats.test.ts.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(25);
 
 insert into auth.users (id, email) values
   ('a0000000-0000-4000-8000-00000000000a', 'owner-a@kasiko.test'),
@@ -165,7 +165,7 @@ select is(
 );
 
 -- ---------------------------------------------------------------------------
--- Cashier price edits
+-- Receipt price-edit switch (decision #44, revised in migration 0900)
 -- ---------------------------------------------------------------------------
 
 set local request.jwt.claims to '{"sub":"a0000000-0000-4000-8000-00000000000c","role":"authenticated"}';
@@ -174,43 +174,17 @@ select is(
   (select cashier_can_edit_prices from public.business_branding where id = 'a0000000-0000-4000-8000-0000000000b0'),
   false, 'the cashier sees the price switch, off by default'
 );
-select throws_ok(
-  $$select public.cashier_set_item_price('a0000000-0000-4000-8000-0000000000d2', 17000)$$,
-  '42501', 'Owner belum mengizinkan kasir mengubah harga', 'no price edits while the owner keeps them off'
-);
 
 set local request.jwt.claims to '{"sub":"a0000000-0000-4000-8000-00000000000a","role":"authenticated"}';
 update public.businesses set cashier_can_edit_prices = true where id = 'a0000000-0000-4000-8000-0000000000b0';
 
 set local request.jwt.claims to '{"sub":"a0000000-0000-4000-8000-00000000000c","role":"authenticated"}';
 select is(
-  public.cashier_set_item_price('a0000000-0000-4000-8000-0000000000d2', 17000),
-  15000::bigint, 'the cashier changes a price and gets the old one back'
-);
-select is(
-  (select price from public.catalog_items where id = 'a0000000-0000-4000-8000-0000000000d2'),
-  17000::bigint, 'the new price is in the catalog'
-);
-select throws_ok(
-  $$select public.cashier_set_item_price('a0000000-0000-4000-8000-0000000000d4', 95000)$$,
-  '22023', 'Layanan sudah tidak aktif', 'an inactive item cannot be repriced'
-);
-select throws_ok(
-  $$select public.cashier_set_item_price('b0000000-0000-4000-8000-0000000000d1', 1000)$$,
-  '42501', null, 'the cashier cannot change another business price'
-);
-select throws_ok(
-  $$select public.cashier_set_item_price('a0000000-0000-4000-8000-0000000000d2', -1)$$,
-  '22023', null, 'a negative price is refused'
+  (select cashier_can_edit_prices from public.business_branding where id = 'a0000000-0000-4000-8000-0000000000b0'),
+  true, 'the cashier sees the switch the owner turned on'
 );
 
 reset role;
-select results_eq(
-  $$select actor_id, (old_data ->> 'price')::bigint, (new_data ->> 'price')::bigint from public.audit_log
-    where entity = 'catalog_items' and action = 'update' and entity_id = 'a0000000-0000-4000-8000-0000000000d2'$$,
-  $$values ('a0000000-0000-4000-8000-00000000000c'::uuid, 15000::bigint, 17000::bigint)$$,
-  'the audit log keeps the cashier, the old and the new price'
-);
 
 -- ---------------------------------------------------------------------------
 -- Templates and the cashier password vault

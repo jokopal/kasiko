@@ -128,6 +128,8 @@ export interface TransactionItemRow {
   catalog_item_id: string | null
   name_snapshot: string
   price_snapshot: number
+  /** Set by the server since migration 0900 (decision #44). */
+  catalog_price?: number | null
   qty: number
   line_total: number
   position?: number
@@ -191,6 +193,7 @@ export function toTransaction(row: TransactionRow): Transaction {
       catalogItemId: item.catalog_item_id,
       nameSnapshot: item.name_snapshot,
       priceSnapshot: item.price_snapshot,
+      catalogPrice: item.catalog_price ?? null,
       qty: item.qty,
       lineTotal: item.line_total,
     })),

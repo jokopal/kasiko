@@ -162,18 +162,19 @@ function CashierPriceCard({ businessId, allowed }: { businessId: string; allowed
         </span>
         <div className="min-w-0 flex-1">
           <label htmlFor="cashier-can-edit-prices" className="text-sm font-medium">
-            Kasir boleh ubah harga
+            Kasir boleh edit nota
           </label>
           <p className="text-xs text-muted-foreground">
-            Bila aktif, tombol harga (ikon gerigi) muncul di layar kasir. Perubahan harus online,
-            transaksi lama tetap memakai harga lamanya, dan setiap perubahan tercatat di Log Audit.
+            Bila aktif, tombol <strong>Edit nota</strong> muncul di layar pembayaran kasir: harga,
+            jumlah, dan item bisa diubah untuk nota itu saja sebelum disimpan dan dicetak. Harga
+            katalog tidak berubah; harga yang diubah terlihat di Detail transaksi.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Button asChild variant="ghost" size="sm">
             <Link to="/owner/log-audit?jenis=harga">
               <HistoryIcon />
-              Riwayat harga
+              Riwayat harga katalog
             </Link>
           </Button>
           <Switch

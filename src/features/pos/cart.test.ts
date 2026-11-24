@@ -55,3 +55,19 @@ describe('totals', () => {
     expect(cartTotal([])).toBe(0)
   })
 })
+
+describe('editing a receipt line price (decision #44)', () => {
+  it('changes one line only and refuses a non-rupiah price', () => {
+    const lines: CartLine[] = [
+      { itemId: 'wash', name: 'a', price: 45_000, qty: 2 },
+      { itemId: 'tire', name: 'b', price: 10_000, qty: 1 },
+    ]
+    const next = cartReducer(lines, { type: 'setPrice', itemId: 'wash', price: 40_000 })
+    expect(next).toEqual([
+      { itemId: 'wash', name: 'a', price: 40_000, qty: 2 },
+      { itemId: 'tire', name: 'b', price: 10_000, qty: 1 },
+    ])
+    expect(cartTotal(next)).toBe(90_000)
+    expect(() => cartReducer(lines, { type: 'setPrice', itemId: 'wash', price: 1.5 })).toThrow()
+  })
+})

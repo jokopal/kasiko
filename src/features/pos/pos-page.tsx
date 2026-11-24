@@ -1,4 +1,4 @@
-import { ChevronUpIcon, ReceiptIcon, SettingsIcon } from 'lucide-react'
+import { ChevronUpIcon, ReceiptIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -18,7 +18,6 @@ import { useCart } from './use-cart'
 import { useKasirData } from './use-kasir-data'
 import { CartPanel } from './cart-panel'
 import { PaymentDialog } from './payment-dialog'
-import { PriceDialog } from './price-dialog'
 
 const ALL = 'all'
 
@@ -34,7 +33,6 @@ export function PosPage() {
   const wantsPayment = (location.state as { pay?: boolean } | null)?.pay === true
   const [payOpen, setPayOpen] = useState(() => wantsPayment && lines.length > 0)
   const [expenseOpen, setExpenseOpen] = useState(false)
-  const [priceOpen, setPriceOpen] = useState(false)
   useEffect(() => {
     // Consume the request so a reload or "back" does not reopen the payment.
     if (wantsPayment) void navigate('.', { replace: true, state: null })
@@ -102,18 +100,6 @@ export function PosPage() {
             <ReceiptIcon />
             <span className="hidden sm:inline">Pengeluaran</span>
           </Button>
-          {business.cashierCanEditPrices && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 shrink-0"
-              aria-label="Ubah harga layanan"
-              onClick={() => setPriceOpen(true)}
-            >
-              <SettingsIcon />
-              <span className="hidden sm:inline">Harga</span>
-            </Button>
-          )}
         </div>
 
         <div className="grid grid-cols-2 gap-2.5 p-3 sm:grid-cols-3 md:grid-cols-2 md:gap-3 md:p-5 lg:grid-cols-3 xl:grid-cols-4">
@@ -201,7 +187,6 @@ export function PosPage() {
       </Sheet>
 
       <PaymentDialog open={payOpen} onOpenChange={setPayOpen} />
-      <PriceDialog open={priceOpen} onOpenChange={setPriceOpen} />
       <ExpenseDialog
         open={expenseOpen}
         onOpenChange={setExpenseOpen}

@@ -459,6 +459,63 @@ export async function fetchVehicleSummary(
   }
 }
 
+export interface VehicleDayRow {
+  dayKey: string
+  categoryId: string
+  name: string
+  vehicles: number
+}
+
+/** Vehicles per day and category from live sales (decision #43). */
+export async function fetchVehicleDays(
+  businessId: string,
+  from: Date,
+  to: Date,
+): Promise<VehicleDayRow[]> {
+  const rows = await rpc<
+    { day_key: string; category_id: string; category_name: string; vehicles: number }[]
+  >('vehicle_days', {
+    p_business_id: businessId,
+    p_from: from.toISOString(),
+    p_to: to.toISOString(),
+  })
+  return rows.map((r) => ({
+    dayKey: r.day_key,
+    categoryId: r.category_id,
+    name: r.category_name,
+    vehicles: Number(r.vehicles),
+  }))
+}
+
+export interface VehicleMonthRow {
+  /** First day of the month, `YYYY-MM-01`. */
+  monthKey: string
+  categoryId: string
+  name: string
+  source: 'kasir' | 'olsera'
+  vehicles: number
+}
+
+/** Vehicles per month and category since the first record, live and imported (#43, #45). */
+export async function fetchVehicleMonths(businessId: string): Promise<VehicleMonthRow[]> {
+  const rows = await rpc<
+    {
+      month_key: string
+      category_id: string
+      category_name: string
+      source: 'kasir' | 'olsera'
+      vehicles: number
+    }[]
+  >('vehicle_months', { p_business_id: businessId })
+  return rows.map((r) => ({
+    monthKey: r.month_key,
+    categoryId: r.category_id,
+    name: r.category_name,
+    source: r.source,
+    vehicles: Number(r.vehicles),
+  }))
+}
+
 export interface DailySummaryPoint {
   dayKey: string
   income: number

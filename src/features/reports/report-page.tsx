@@ -14,12 +14,15 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageLoading } from '@/components/page-loading'
 import type { Cell } from '@/features/history/cashflow-import'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   BEGINNING_OF_RECORDS,
   fetchExpenses,
   fetchHistoryRange,
   fetchPeriodTotals,
   fetchTransactions,
+  fetchVehicleDays,
+  fetchVehicleMonths,
 } from '@/features/data/owner'
 import { useOwnerData } from '@/features/data/owner-data'
 import { keys } from '@/features/data/query-client'
@@ -34,11 +37,22 @@ import { buildReport, periodLabel, type ReportTable, type ReportTabId } from './
 import { flowSummary } from './summary'
 import { SummaryCards } from './summary-cards'
 import { usePeriod } from './use-period'
+import {
+  monthLabel,
+  vehicleCategories,
+  vehicleCategoryTable,
+  vehicleDailyTable,
+  vehicleMonthlyTable,
+  vehicleYearlyTable,
+} from './vehicle-report'
 
 // Laporan (decision #41): every table of a period in tabs, exported as one workbook (a
 // sheet per tab) or one PDF. The "Bulanan" tab keeps the spreadsheet layout per month.
 
-type TabId = ReportTabId | 'bulanan'
+type TabId = ReportTabId | 'kendaraan' | 'bulanan'
+
+/** Tabs with their own data and export, outside the period workbook. */
+const OWN_TABS: readonly TabId[] = ['kendaraan', 'bulanan']
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'ringkasan', label: 'Ringkasan' },
@@ -46,6 +60,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'pemasukan', label: 'Pemasukan' },
   { id: 'pengeluaran', label: 'Pengeluaran' },
   { id: 'kategori', label: 'Per Kategori' },
+  { id: 'kendaraan', label: 'Kendaraan' },
   { id: 'bulanan', label: 'Bulanan (format Excel)' },
 ]
 
@@ -67,7 +82,7 @@ export function ReportPage() {
 
   const query = useQuery({
     queryKey: keys.report(business.id, 'laporan', firstDayKey, lastDayKey),
-    enabled: tab !== 'bulanan',
+    enabled: !OWN_TABS.includes(tab),
     queryFn: async () => {
       const id = business.id
       const [current, before, transactions, expenses, history] = await Promise.all([
@@ -126,30 +141,34 @@ export function ReportPage() {
       description={
         tab === 'bulanan'
           ? `${business.name} · per bulan`
-          : `${business.name} · ${label} · kumulatif sejak data pertama`
+          : tab === 'kendaraan'
+            ? `${business.name} · kendaraan per kategori: harian ${label}, bulanan & tahunan sejak data pertama`
+            : `${business.name} · ${label} · kumulatif sejak data pertama`
       }
       actions={
         tab !== 'bulanan' && (
           <>
             <PeriodPicker period={period} />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" disabled={!report}>
-                  <DownloadIcon />
-                  Ekspor
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => void exportAs('xlsx')}>
-                  <FileSpreadsheetIcon />
-                  Excel — {TABS.length - 1} sheet
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void exportAs('pdf')}>
-                  <FileTextIcon />
-                  PDF — A4 mendatar
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {tab !== 'kendaraan' && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={!report}>
+                    <DownloadIcon />
+                    Ekspor
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => void exportAs('xlsx')}>
+                    <FileSpreadsheetIcon />
+                    Excel — {TABS.length - OWN_TABS.length} sheet
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void exportAs('pdf')}>
+                    <FileTextIcon />
+                    PDF — A4 mendatar
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </>
         )
       }
@@ -165,7 +184,7 @@ export function ReportPage() {
           </TabsList>
         </div>
 
-        {TABS.filter((t) => t.id !== 'bulanan').map((t) => (
+        {TABS.filter((t) => !OWN_TABS.includes(t.id)).map((t) => (
           <TabsContent key={t.id} value={t.id} className="space-y-4">
             {report ? (
               <>
@@ -181,6 +200,9 @@ export function ReportPage() {
             )}
           </TabsContent>
         ))}
+        <TabsContent value="kendaraan" className="space-y-4">
+          <VehicleReport period={period} />
+        </TabsContent>
         <TabsContent value="bulanan">
           <MonthlyRecap />
         </TabsContent>
@@ -298,5 +320,143 @@ function ReportTableView({ table }: { table: ReportTable }) {
         </div>
       )}
     </Card>
+  )
+}
+
+type VehicleView = 'harian' | 'bulanan' | 'tahunan' | 'kategori'
+
+const VEHICLE_VIEWS: { id: VehicleView; label: string }[] = [
+  { id: 'harian', label: 'Per hari' },
+  { id: 'bulanan', label: 'Per bulan' },
+  { id: 'tahunan', label: 'Per tahun' },
+  { id: 'kategori', label: 'Kumulatif' },
+]
+
+/**
+ * Decision #43: vehicles per category per day (picked period, cashier sales), and per
+ * month / year / cumulative since the first Olsera report.
+ */
+function VehicleReport({ period }: { period: ReturnType<typeof usePeriod> }) {
+  const { business, catalogCategories } = useOwnerData()
+  const [view, setView] = useState<VehicleView>('harian')
+  const { range, firstDayKey, lastDayKey } = period
+  const days = useQuery({
+    queryKey: keys.report(business.id, 'vehicle-days', firstDayKey, lastDayKey),
+    queryFn: () => fetchVehicleDays(business.id, range.from, range.to),
+  })
+  const months = useQuery({
+    queryKey: keys.report(business.id, 'vehicle-months'),
+    queryFn: () => fetchVehicleMonths(business.id),
+  })
+
+  const catalog = useMemo(
+    () =>
+      catalogCategories.filter((c) => c.countsVehicles).map((c) => ({ id: c.id, name: c.name })),
+    [catalogCategories],
+  )
+  const tables = useMemo(() => {
+    if (!days.data || !months.data) return null
+    const monthCats = vehicleCategories(catalog, months.data)
+    return {
+      harian: vehicleDailyTable(days.data, vehicleCategories(catalog, days.data)),
+      bulanan: vehicleMonthlyTable(months.data, monthCats),
+      tahunan: vehicleYearlyTable(months.data, monthCats),
+      kategori: vehicleCategoryTable(months.data, monthCats),
+    }
+  }, [days.data, months.data, catalog])
+
+  async function exportAs(format: 'xlsx' | 'pdf') {
+    if (!tables) return
+    const toastId = toast.loading('Menyiapkan file…')
+    const meta: ReportMeta = {
+      businessName: business.name,
+      period: `Harian ${periodLabel(firstDayKey, lastDayKey)}; bulanan & tahunan sejak data pertama`,
+      createdAt: formatDateTime(new Date(), business.timezone),
+    }
+    const fileName = `${business.name} - Kendaraan ${firstDayKey} sd ${lastDayKey}.${format}`
+    const all = [tables.harian, tables.bulanan, tables.tahunan, tables.kategori]
+    try {
+      if (format === 'xlsx') await downloadReportWorkbook(fileName, all, meta)
+      else await downloadReportPdf(fileName, all, meta)
+      toast.success('File siap diunduh', { id: toastId })
+    } catch {
+      toast.error('Ekspor gagal. Coba lagi.', { id: toastId })
+    }
+  }
+
+  const error = days.error ?? months.error
+  if (error) {
+    return <p className="text-sm text-destructive">Data kendaraan gagal dimuat: {error.message}</p>
+  }
+  if (!tables || !months.data) return <PageLoading />
+
+  const cumulative = tables.kategori
+  const firstMonth = months.data[0]?.monthKey
+  const total = cumulative.footer?.[1]
+  return (
+    <>
+      <section
+        aria-label="Kumulatif per kategori"
+        className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+      >
+        {cumulative.rows.map((row) => (
+          <Card key={String(row[0])} className="gap-1 px-4 py-3">
+            <p className="truncate text-xs font-medium text-muted-foreground">{String(row[0])}</p>
+            <p className="text-xl font-semibold tracking-tight tabular-nums">
+              {typeof row[1] === 'number' ? formatDigits(row[1]) : '–'}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {String(row[2] ?? '')} · sejak {String(row[3] ?? '')}
+            </p>
+          </Card>
+        ))}
+        <Card className="gap-1 px-4 py-3 ring-2 ring-primary/40">
+          <p className="text-xs font-medium text-muted-foreground">Total kendaraan</p>
+          <p className="text-xl font-semibold tracking-tight tabular-nums">
+            {typeof total === 'number' ? formatDigits(total) : '–'}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">
+            {firstMonth ? `sejak ${monthLabel(firstMonth)}` : 'belum ada data'}
+          </p>
+        </Card>
+      </section>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          value={view}
+          onValueChange={(value) => value && setView(value as VehicleView)}
+          aria-label="Tampilan kendaraan"
+          className="flex-wrap"
+        >
+          {VEHICLE_VIEWS.map((v) => (
+            <ToggleGroupItem key={v.id} value={v.id} className="h-10 px-4">
+              {v.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline">
+              <DownloadIcon />
+              Ekspor kendaraan
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => void exportAs('xlsx')}>
+              <FileSpreadsheetIcon />
+              Excel, 4 sheet
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void exportAs('pdf')}>
+              <FileTextIcon />
+              PDF, A4 mendatar
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <ReportTableView key={view} table={tables[view]} />
+    </>
   )
 }

@@ -31,12 +31,15 @@ const VEHICLE_SERIES = '#2a78d6' // same categorical blue as Pemasukan, never th
 /** Today's income, expense, profit and vehicles, each next to yesterday's. */
 export function TodayStrip({
   data,
+  vehicles,
   error,
   todayKey,
   yesterdayKey,
   tz,
 }: {
   data: DayFigures[] | undefined
+  /** Today's vehicles per category (decision #43). */
+  vehicles: readonly { name: string; vehicles: number }[]
   error: Error | null
   todayKey: string
   yesterdayKey: string
@@ -60,13 +63,21 @@ export function TodayStrip({
           ))}
         </div>
       ) : (
-        <TodayTiles {...todayAndYesterday(data, todayKey, yesterdayKey)} />
+        <TodayTiles {...todayAndYesterday(data, todayKey, yesterdayKey)} vehicles={vehicles} />
       )}
     </section>
   )
 }
 
-function TodayTiles({ today, yesterday }: { today: DayStats; yesterday: DayStats }) {
+function TodayTiles({
+  today,
+  yesterday,
+  vehicles,
+}: {
+  today: DayStats
+  yesterday: DayStats
+  vehicles: readonly { name: string; vehicles: number }[]
+}) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <Tile
@@ -95,6 +106,7 @@ function TodayTiles({ today, yesterday }: { today: DayStats; yesterday: DayStats
         value={today.vehicles.toLocaleString('id-ID')}
         unit={`dari ${today.transactions} transaksi`}
         before={`Kemarin ${yesterday.vehicles.toLocaleString('id-ID')}`}
+        breakdown={vehicles}
       />
     </div>
   )
@@ -108,6 +120,7 @@ function Tile({
   before,
   negative = false,
   emphasis = false,
+  breakdown,
 }: {
   icon: LucideIcon
   label: string
@@ -116,6 +129,7 @@ function Tile({
   before: string
   negative?: boolean
   emphasis?: boolean
+  breakdown?: readonly { name: string; vehicles: number }[]
 }) {
   return (
     <Card className={cn('gap-0 py-0', emphasis && 'ring-2 ring-primary/40')}>
@@ -134,6 +148,18 @@ function Tile({
         </p>
         {unit && <p className="truncate text-xs text-muted-foreground">{unit}</p>}
         <p className="truncate text-xs text-muted-foreground tabular-nums">{before}</p>
+        {breakdown && breakdown.length > 0 && (
+          <ul className="mt-1.5 space-y-0.5 border-t pt-1.5 text-xs" aria-label="Per kategori">
+            {breakdown.map((b) => (
+              <li key={b.name} className="flex justify-between gap-2">
+                <span className="truncate text-muted-foreground">{b.name}</span>
+                <span className="font-medium tabular-nums">
+                  {b.vehicles.toLocaleString('id-ID')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </CardContent>
     </Card>
   )

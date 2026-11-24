@@ -21,6 +21,7 @@ import {
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { recordSale } from './commands'
+import { ReceiptEditor } from './receipt-editor'
 import { applicableDiscounts, discountAmount, describeDiscount } from './discount'
 import { useCart } from './use-cart'
 import { useKasirData } from './use-kasir-data'
@@ -122,7 +123,9 @@ function PaymentForm({ onSaved }: { onSaved: (transaction: Transaction) => void 
 
   // Physical keyboard support for laptops: digits, Backspace, Enter.
   function onKeyDown(event: KeyboardEvent) {
-    if (method !== 'cash' || event.target instanceof HTMLTextAreaElement) return
+    const typing =
+      event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement
+    if (method !== 'cash' || typing) return
     if (/^\d$/.test(event.key)) pressDigit(event.key)
     else if (event.key === 'Backspace') backspace()
     else if (event.key === 'Enter') void save()
@@ -145,6 +148,13 @@ function PaymentForm({ onSaved }: { onSaved: (transaction: Transaction) => void 
           {order?.plateNumber && <> · {order.plateNumber}</>}
         </DialogDescription>
       </DialogHeader>
+
+      <ReceiptEditor
+        onChange={() => {
+          setCash(null)
+          setDiscountId('none')
+        }}
+      />
 
       {discountOptions.length > 0 && (
         <div className="grid gap-2">

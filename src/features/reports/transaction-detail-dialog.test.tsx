@@ -89,6 +89,28 @@ describe('TransactionDetailDialog', () => {
     expect(dialog.querySelector('.receipt-paper')).toHaveTextContent('*** DIBATALKAN ***')
   })
 
+  it('lists lines whose price was edited on the receipt', () => {
+    show({
+      ...transaction,
+      items: [
+        {
+          ...transaction.items[0]!,
+          priceSnapshot: 45_000,
+          lineTotal: 90_000,
+          catalogPrice: 50_000,
+        },
+      ],
+    })
+    const dialog = screen.getByRole('dialog', { name: 'Detail transaksi' })
+    expect(dialog).toHaveTextContent('Harga diubah di nota')
+    expect(dialog).toHaveTextContent('Cuci Mobil Sedang: Rp 50.000 → Rp 45.000')
+  })
+
+  it('says nothing about prices when they match the catalog', () => {
+    show({ ...transaction, items: [{ ...transaction.items[0]!, catalogPrice: 50_000 }] })
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('Harga diubah di nota')
+  })
+
   it('renders nothing without a transaction', () => {
     render(
       <TransactionDetailDialog transaction={null} business={business} onClose={() => undefined} />,

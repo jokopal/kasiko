@@ -63,6 +63,11 @@ export interface TransactionItem {
   catalogItemId: string | null
   nameSnapshot: string
   priceSnapshot: number
+  /**
+   * Catalog price when the sale reached the server; differs from `priceSnapshot` when the
+   * cashier edited the line on the receipt (decision #44). Null before migration 0900.
+   */
+  catalogPrice?: number | null
   qty: number
   lineTotal: number
 }

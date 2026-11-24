@@ -18,6 +18,10 @@ import {
 
 export type ReportTabId = 'ringkasan' | 'harian' | 'pemasukan' | 'pengeluaran' | 'kategori'
 
+/** The Kendaraan tab's tables (decision #43), built in vehicle-report.ts. */
+export type VehicleTableId =
+  'kendaraan-harian' | 'kendaraan-bulanan' | 'kendaraan-tahunan' | 'kendaraan-kategori'
+
 export interface ReportColumn {
   label: string
   /** Rupiah amounts: right-aligned, grouped digits on screen and in the PDF. */
@@ -27,7 +31,7 @@ export interface ReportColumn {
 }
 
 export interface ReportTable {
-  id: ReportTabId
+  id: ReportTabId | VehicleTableId
   /** Tab label and sheet name. */
   name: string
   title: string

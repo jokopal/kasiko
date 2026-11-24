@@ -21,6 +21,7 @@ import {
   BEGINNING_OF_RECORDS,
   fetchBusyHours,
   fetchDailySummary,
+  fetchVehicleDays,
   fetchExpenseByCategory,
   fetchMonthlyTotals,
   fetchPeriodTotals,
@@ -48,6 +49,7 @@ import {
 import { cn } from '@/lib/utils'
 import { DashboardCustomizer } from './dashboard-customizer'
 import { AverageIncomePanel, DailyHistoryPanel, TodayStrip, VehiclesPanel } from './daily-panels'
+import { categoryBreakdown } from './vehicle-report'
 import { averageDailyIncome, dailyHistory, vehicleStats } from './daily-stats'
 import { kindLookup, monthKeysEnding, type MonthPoint, type PeriodTotals } from './finance'
 import { PeriodPicker } from './period-picker'
@@ -99,7 +101,7 @@ const PANEL_SPAN: Partial<Record<PanelId, string>> = {
 }
 
 export function DashboardPage() {
-  const { business, config, expenseCategories } = useOwnerData()
+  const { business, config, expenseCategories, catalogCategories } = useOwnerData()
   const tz = business.timezone
   const period = usePeriod(tz)
   const { range } = period
@@ -134,9 +136,28 @@ export function DashboardPage() {
   const yesterdayKey = shiftDayKey(todayKey, -1)
   const today = useQuery({
     queryKey: keys.report(business.id, 'today', todayKey),
-    queryFn: () => fetchDailySummary(business.id, yesterdayKey, todayKey),
+    queryFn: async () => {
+      const [days, vehicles] = await Promise.all([
+        fetchDailySummary(business.id, yesterdayKey, todayKey),
+        fetchVehicleDays(
+          business.id,
+          startOfBusinessDayKey(todayKey, tz),
+          startOfBusinessDayKey(shiftDayKey(todayKey, 1), tz),
+        ),
+      ])
+      return { days, vehicles }
+    },
     refetchInterval: 60_000,
   })
+  const todayVehicles = useMemo(
+    () =>
+      categoryBreakdown(
+        today.data?.vehicles ?? [],
+        todayKey,
+        catalogCategories.map((c) => ({ id: c.id, name: c.name })),
+      ),
+    [today.data, todayKey, catalogCategories],
+  )
   const kindOf = useMemo(() => kindLookup(expenseCategories), [expenseCategories])
 
   if (!query.data) {
@@ -243,7 +264,8 @@ export function DashboardPage() {
       }
     >
       <TodayStrip
-        data={today.data}
+        data={today.data?.days}
+        vehicles={todayVehicles}
         error={today.error}
         todayKey={todayKey}
         yesterdayKey={yesterdayKey}
