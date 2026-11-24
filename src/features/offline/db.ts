@@ -7,6 +7,7 @@ import type {
   Expense,
   ExpenseCategory,
   Order,
+  ReceiptCorrection,
   Transaction,
 } from '@/lib/types'
 
@@ -16,6 +17,13 @@ import type {
 export type OutboxOperation =
   | { kind: 'transaction.create'; record: Transaction }
   | { kind: 'transaction.void'; targetId: string; reason: string; voidedAt: string }
+  /** A receipt correction (decision #44); the newest device time wins on the server. */
+  | {
+      kind: 'transaction.correct'
+      targetId: string
+      correction: ReceiptCorrection
+      correctedAt: string
+    }
   /** deviceId: drawer expenses are taken at a registered device (server-checked). */
   | { kind: 'expense.create'; record: Expense; deviceId?: string }
   | { kind: 'expense.void'; targetId: string; reason: string; voidedAt: string }

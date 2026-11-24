@@ -2,6 +2,7 @@ import { noteProblem } from '@/features/expenses/rules'
 import type { DeviceRecord } from '@/features/offline/db'
 import { takeSequence } from '@/features/offline/device'
 import { enqueue } from '@/features/offline/outbox'
+import { cleanCorrection, correctionError } from '@/features/receipt/receipt-correction'
 import { formatReceiptNo } from '@/features/receipt/receipt-number'
 import { businessDayKey } from '@/lib/datetime'
 import { newId } from '@/lib/id'
@@ -14,6 +15,7 @@ import type {
   Order,
   PaymentMethod,
   Transaction,
+  ReceiptCorrection,
 } from '@/lib/types'
 import { cartTotal, lineTotal, type CartLine } from './cart'
 import { discountAmount } from './discount'
@@ -161,6 +163,36 @@ export async function requestVoid(
     voidedAt: now.toISOString(),
   })
   return ok(undefined)
+}
+
+/**
+ * Decision #44: corrects what today's receipt prints (names, quantity, price per line,
+ * plate). Income keeps the real sale; the server logs the correction in audit_log. Queued
+ * like every cashier write, so it works offline.
+ */
+export async function correctReceipt(
+  transaction: Transaction,
+  business: Business,
+  correction: ReceiptCorrection,
+  now = new Date(),
+): Promise<Result<Transaction>> {
+  if (!business.cashierCanEditPrices) return fail('Owner belum mengizinkan kasir mengedit nota')
+  if (transaction.status === 'void') return fail('Transaksi sudah dibatalkan')
+  const today = businessDayKey(now, business.timezone)
+  if (businessDayKey(new Date(transaction.occurredAt), business.timezone) !== today) {
+    return fail('Kasir hanya bisa mengedit nota hari ini')
+  }
+  const problem = correctionError(correction)
+  if (problem) return fail(problem)
+  const clean = cleanCorrection(correction)
+  const correctedAt = now.toISOString()
+  await enqueue(business.id, {
+    kind: 'transaction.correct',
+    targetId: transaction.id,
+    correction: clean,
+    correctedAt,
+  })
+  return ok({ ...transaction, receiptCorrection: clean, receiptCorrectedAt: correctedAt })
 }
 
 // --- Pay-at-the-end orders (decision #34) ---------------------------------------------

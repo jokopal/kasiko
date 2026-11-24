@@ -1,6 +1,7 @@
 import { formatDateTime } from '@/lib/datetime'
 import { formatDigits, formatRupiah } from '@/lib/money'
 import { PAYMENT_METHOD_LABEL, type Business, type Transaction } from '@/lib/types'
+import { printedTransaction } from './receipt-correction'
 
 // The single source of truth for receipt content. Bluetooth (ESC/POS), browser print
 // and WhatsApp all render these lines, so every channel shows exactly the same receipt.
@@ -82,10 +83,12 @@ export function twoColumns(left: string, right: string, width: number): string[]
 }
 
 export function formatReceipt(
-  transaction: Transaction,
+  sale: Transaction,
   business: ReceiptBusiness,
   paper: PaperWidth,
 ): ReceiptLine[] {
+  // A corrected receipt prints its correction; income keeps the real sale (decision #44).
+  const transaction = printedTransaction(sale)
   const width = PAPER_CHARS[paper]
   const lines: ReceiptLine[] = []
   const push = (text: string, options: Partial<Omit<ReceiptLine, 'text'>> = {}) =>

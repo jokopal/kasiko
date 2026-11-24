@@ -462,7 +462,10 @@ export async function fetchVehicleSummary(
 export interface VehicleDayRow {
   dayKey: string
   categoryId: string
+  /** Category name. */
   name: string
+  itemId: string
+  itemName: string
   vehicles: number
 }
 
@@ -473,7 +476,14 @@ export async function fetchVehicleDays(
   to: Date,
 ): Promise<VehicleDayRow[]> {
   const rows = await rpc<
-    { day_key: string; category_id: string; category_name: string; vehicles: number }[]
+    {
+      day_key: string
+      category_id: string
+      category_name: string
+      item_id: string
+      item_name: string
+      vehicles: number
+    }[]
   >('vehicle_days', {
     p_business_id: businessId,
     p_from: from.toISOString(),
@@ -483,6 +493,8 @@ export async function fetchVehicleDays(
     dayKey: r.day_key,
     categoryId: r.category_id,
     name: r.category_name,
+    itemId: r.item_id,
+    itemName: r.item_name,
     vehicles: Number(r.vehicles),
   }))
 }
@@ -491,7 +503,10 @@ export interface VehicleMonthRow {
   /** First day of the month, `YYYY-MM-01`. */
   monthKey: string
   categoryId: string
+  /** Category name. */
   name: string
+  itemId: string
+  itemName: string
   source: 'kasir' | 'olsera'
   vehicles: number
 }
@@ -503,6 +518,8 @@ export async function fetchVehicleMonths(businessId: string): Promise<VehicleMon
       month_key: string
       category_id: string
       category_name: string
+      item_id: string
+      item_name: string
       source: 'kasir' | 'olsera'
       vehicles: number
     }[]
@@ -511,6 +528,8 @@ export async function fetchVehicleMonths(businessId: string): Promise<VehicleMon
     monthKey: r.month_key,
     categoryId: r.category_id,
     name: r.category_name,
+    itemId: r.item_id,
+    itemName: r.item_name,
     source: r.source,
     vehicles: Number(r.vehicles),
   }))

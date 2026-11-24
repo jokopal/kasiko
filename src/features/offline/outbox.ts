@@ -18,6 +18,8 @@ function operationId(operation: OutboxOperation): string {
     case 'expense.void':
     case 'order.cancel':
       return `${operation.kind}:${operation.targetId}`
+    case 'transaction.correct':
+      return `${operation.kind}:${operation.targetId}:${operation.correctedAt}`
     case 'order.save':
       // Every edit is its own entry; the server keeps the newest by device time.
       return `${operation.kind}:${operation.record.id}:${operation.record.deviceUpdatedAt}`

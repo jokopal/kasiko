@@ -14,11 +14,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { SyncState } from '@/features/offline/local-view'
 import { ReceiptDetail } from '@/features/receipt/receipt-detail'
-import { formatLongDate, formatTime } from '@/lib/datetime'
+import { businessDayKey, formatLongDate, formatTime } from '@/lib/datetime'
 import { formatRupiah } from '@/lib/money'
 import { PAYMENT_METHOD_LABEL, type Business, type Expense, type Transaction } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { requestVoid } from './commands'
+import { correctReceipt, requestVoid } from './commands'
 import { useKasirData } from './use-kasir-data'
 
 type VoidTarget = { kind: 'transaction'; row: Transaction } | { kind: 'expense'; row: Expense }
@@ -201,7 +201,27 @@ function ReprintDialog({
           <DialogTitle>Cetak ulang nota</DialogTitle>
           <DialogDescription className="font-mono">{transaction?.receiptNo}</DialogDescription>
         </DialogHeader>
-        {transaction && <ReceiptDetail transaction={transaction} business={business} />}
+        {transaction && (
+          <ReceiptDetail
+            key={transaction.id}
+            transaction={transaction}
+            business={business}
+            onCorrect={
+              business.cashierCanEditPrices &&
+              businessDayKey(new Date(transaction.occurredAt), business.timezone) ===
+                businessDayKey(new Date(), business.timezone)
+                ? async (correction) => {
+                    const result = await correctReceipt(transaction, business, correction)
+                    if (!result.ok) {
+                      toast.error(result.error)
+                      return null
+                    }
+                    return result.value
+                  }
+                : undefined
+            }
+          />
+        )}
       </DialogContent>
     </Dialog>
   )

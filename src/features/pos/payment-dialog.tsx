@@ -10,18 +10,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { ReceiptActions } from '@/features/receipt/receipt-actions'
+import { ReceiptDetail } from '@/features/receipt/receipt-detail'
 import { formatRupiah } from '@/lib/money'
 import {
   PAYMENT_METHOD_LABEL,
   PAYMENT_METHODS,
   type Business,
   type PaymentMethod,
+  type ReceiptCorrection,
   type Transaction,
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { recordSale } from './commands'
-import { ReceiptEditor } from './receipt-editor'
+import { correctReceipt, recordSale } from './commands'
 import { applicableDiscounts, discountAmount, describeDiscount } from './discount'
 import { useCart } from './use-cart'
 import { useKasirData } from './use-kasir-data'
@@ -54,6 +54,7 @@ export function PaymentDialog({ open, onOpenChange }: PaymentDialogProps) {
           <PaymentDone
             transaction={saved}
             business={business}
+            onCorrected={setSaved}
             onNew={() => handleOpenChange(false)}
           />
         ) : (
@@ -148,13 +149,6 @@ function PaymentForm({ onSaved }: { onSaved: (transaction: Transaction) => void 
           {order?.plateNumber && <> · {order.plateNumber}</>}
         </DialogDescription>
       </DialogHeader>
-
-      <ReceiptEditor
-        onChange={() => {
-          setCash(null)
-          setDiscountId('none')
-        }}
-      />
 
       {discountOptions.length > 0 && (
         <div className="grid gap-2">
@@ -304,12 +298,25 @@ function PaymentForm({ onSaved }: { onSaved: (transaction: Transaction) => void 
 function PaymentDone({
   transaction,
   business,
+  onCorrected,
   onNew,
 }: {
   transaction: Transaction
   business: Business
+  onCorrected: (transaction: Transaction) => void
   onNew: () => void
 }) {
+  const { preview } = useKasirData()
+  async function correct(correction: ReceiptCorrection) {
+    const result = await correctReceipt(transaction, business, correction)
+    if (!result.ok) {
+      toast.error(result.error)
+      return null
+    }
+    onCorrected(result.value)
+    return result.value
+  }
+
   return (
     <div className="grid gap-5">
       <DialogHeader className="items-center text-center">
@@ -332,7 +339,11 @@ function PaymentDone({
         )}
       </div>
 
-      <ReceiptActions transaction={transaction} business={business} />
+      <ReceiptDetail
+        transaction={transaction}
+        business={business}
+        onCorrect={business.cashierCanEditPrices && !preview ? correct : undefined}
+      />
 
       <Button size="lg" className="h-14 text-lg font-semibold" onClick={onNew} autoFocus>
         Transaksi Baru

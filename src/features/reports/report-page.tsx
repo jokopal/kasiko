@@ -39,11 +39,13 @@ import { SummaryCards } from './summary-cards'
 import { usePeriod } from './use-period'
 import {
   monthLabel,
-  vehicleCategories,
-  vehicleCategoryTable,
+  vehicleCumulativeTable,
   vehicleDailyTable,
   vehicleMonthlyTable,
+  vehicleOverview,
+  vehicleSeries,
   vehicleYearlyTable,
+  type VehicleDetail,
 } from './vehicle-report'
 
 // Laporan (decision #41): every table of a period in tabs, exported as one workbook (a
@@ -232,6 +234,18 @@ function ReportTableView({ table }: { table: ReportTable }) {
         : String(value)
   const tone = (value: Cell, money: boolean | undefined) =>
     money && typeof value === 'number' && value < 0 ? 'text-destructive' : undefined
+  // A category heading over its services when columns carry a group (Kendaraan tab).
+  const groups = table.columns.some((c) => c.group)
+    ? table.columns.reduce<{ label: string; span: number }[]>((runs, c) => {
+        const label = c.group ?? ''
+        const last = runs.at(-1)
+        if (last && last.label === label && label !== '') last.span += 1
+        else runs.push({ label, span: 1 })
+        return runs
+      }, [])
+    : null
+  // The first column stays in view while a wide table scrolls sideways.
+  const pin = (i: number, surface: string) => i === 0 && cn('sticky left-0 z-[1]', surface)
 
   return (
     <Card className="gap-0 py-0">
@@ -239,14 +253,34 @@ function ReportTableView({ table }: { table: ReportTable }) {
         <table className="w-full border-separate border-spacing-0 text-sm">
           <caption className="sr-only">{table.title}</caption>
           <thead className="sticky top-0 z-10">
+            {groups && (
+              <tr>
+                {groups.map((g, i) => (
+                  <th
+                    key={i}
+                    scope="colgroup"
+                    colSpan={g.span}
+                    className={cn(
+                      'bg-muted px-3 pt-2 pb-1 text-center text-xs font-medium whitespace-nowrap text-muted-foreground',
+                      g.label && 'border-x border-background',
+                      pin(i, 'bg-muted'),
+                    )}
+                  >
+                    {g.label}
+                  </th>
+                ))}
+              </tr>
+            )}
             <tr>
-              {table.columns.map((c) => (
+              {table.columns.map((c, i) => (
                 <th
-                  key={c.label}
+                  key={i}
                   scope="col"
                   className={cn(
                     'border-b bg-muted px-3 py-2 font-medium whitespace-nowrap',
                     c.money ? 'text-right' : 'text-left',
+                    c.strong && 'text-foreground',
+                    pin(i, 'bg-muted'),
                   )}
                 >
                   {c.label}
@@ -266,6 +300,8 @@ function ReportTableView({ table }: { table: ReportTable }) {
                         'border-b px-3 py-1.5',
                         money ? 'text-right whitespace-nowrap tabular-nums' : 'text-left',
                         i === 0 && 'whitespace-pre-wrap',
+                        table.columns[i]?.strong && 'bg-muted/40 font-medium',
+                        pin(i, 'bg-card'),
                         tone(value, money),
                       )}
                     >
@@ -297,6 +333,7 @@ function ReportTableView({ table }: { table: ReportTable }) {
                       className={cn(
                         'border-t-2 bg-card px-3 py-2',
                         money ? 'text-right whitespace-nowrap tabular-nums' : 'text-left',
+                        pin(i, 'bg-card'),
                         tone(value, money),
                       )}
                     >
@@ -323,22 +360,33 @@ function ReportTableView({ table }: { table: ReportTable }) {
   )
 }
 
-type VehicleView = 'harian' | 'bulanan' | 'tahunan' | 'kategori'
+type VehicleView = 'harian' | 'bulanan' | 'tahunan' | 'kumulatif'
 
 const VEHICLE_VIEWS: { id: VehicleView; label: string }[] = [
   { id: 'harian', label: 'Per hari' },
   { id: 'bulanan', label: 'Per bulan' },
   { id: 'tahunan', label: 'Per tahun' },
-  { id: 'kategori', label: 'Kumulatif' },
+  { id: 'kumulatif', label: 'Kumulatif' },
 ]
 
+const VEHICLE_DETAILS: { id: VehicleDetail; label: string }[] = [
+  { id: 'kategori', label: 'Kategori' },
+  { id: 'layanan', label: 'Jenis layanan' },
+]
+
+// Categorical blue shared with the dashboard vehicle panel; never the brand color.
+const VEHICLE_SERIES = '#2a78d6'
+
+const SEGMENT = 'h-10 px-4 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground'
+
 /**
- * Decision #43: vehicles per category per day (picked period, cashier sales), and per
- * month / year / cumulative since the first Olsera report.
+ * Decision #43: vehicles per category or per catalog service, per day (picked period,
+ * cashier sales) and per month / year / cumulative since the first Olsera report.
  */
 function VehicleReport({ period }: { period: ReturnType<typeof usePeriod> }) {
-  const { business, catalogCategories } = useOwnerData()
-  const [view, setView] = useState<VehicleView>('harian')
+  const { business, catalogCategories, catalogItems } = useOwnerData()
+  const [view, setView] = useState<VehicleView>('bulanan')
+  const [detail, setDetail] = useState<VehicleDetail>('kategori')
   const { range, firstDayKey, lastDayKey } = period
   const days = useQuery({
     queryKey: keys.report(business.id, 'vehicle-days', firstDayKey, lastDayKey),
@@ -349,32 +397,44 @@ function VehicleReport({ period }: { period: ReturnType<typeof usePeriod> }) {
     queryFn: () => fetchVehicleMonths(business.id),
   })
 
-  const catalog = useMemo(
-    () =>
-      catalogCategories.filter((c) => c.countsVehicles).map((c) => ({ id: c.id, name: c.name })),
-    [catalogCategories],
-  )
+  const catalog = useMemo(() => {
+    const categories = [...catalogCategories]
+      .filter((c) => c.countsVehicles)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+    return {
+      categories: categories.map((c) => ({ id: c.id, name: c.name })),
+      items: [...catalogItems]
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((i) => ({ id: i.id, name: i.name, categoryId: i.categoryId })),
+    }
+  }, [catalogCategories, catalogItems])
+
   const tables = useMemo(() => {
     if (!days.data || !months.data) return null
-    const monthCats = vehicleCategories(catalog, months.data)
+    const monthSeries = vehicleSeries(catalog, months.data, detail)
     return {
-      harian: vehicleDailyTable(days.data, vehicleCategories(catalog, days.data)),
-      bulanan: vehicleMonthlyTable(months.data, monthCats),
-      tahunan: vehicleYearlyTable(months.data, monthCats),
-      kategori: vehicleCategoryTable(months.data, monthCats),
+      harian: vehicleDailyTable(days.data, vehicleSeries(catalog, days.data, detail), detail),
+      bulanan: vehicleMonthlyTable(months.data, monthSeries, detail),
+      tahunan: vehicleYearlyTable(months.data, monthSeries, detail),
+      kumulatif: vehicleCumulativeTable(months.data, monthSeries, detail),
     }
-  }, [days.data, months.data, catalog])
+  }, [days.data, months.data, catalog, detail])
+  const overview = useMemo(
+    () => (months.data ? vehicleOverview(months.data, catalog) : null),
+    [months.data, catalog],
+  )
 
   async function exportAs(format: 'xlsx' | 'pdf') {
     if (!tables) return
     const toastId = toast.loading('Menyiapkan file…')
+    const by = detail === 'layanan' ? 'per jenis layanan' : 'per kategori'
     const meta: ReportMeta = {
       businessName: business.name,
-      period: `Harian ${periodLabel(firstDayKey, lastDayKey)}; bulanan & tahunan sejak data pertama`,
+      period: `Kendaraan ${by}; harian ${periodLabel(firstDayKey, lastDayKey)}, bulanan & tahunan sejak data pertama`,
       createdAt: formatDateTime(new Date(), business.timezone),
     }
-    const fileName = `${business.name} - Kendaraan ${firstDayKey} sd ${lastDayKey}.${format}`
-    const all = [tables.harian, tables.bulanan, tables.tahunan, tables.kategori]
+    const fileName = `${business.name} - Kendaraan ${by} ${firstDayKey} sd ${lastDayKey}.${format}`
+    const all = [tables.harian, tables.bulanan, tables.tahunan, tables.kumulatif]
     try {
       if (format === 'xlsx') await downloadReportWorkbook(fileName, all, meta)
       else await downloadReportPdf(fileName, all, meta)
@@ -388,59 +448,104 @@ function VehicleReport({ period }: { period: ReturnType<typeof usePeriod> }) {
   if (error) {
     return <p className="text-sm text-destructive">Data kendaraan gagal dimuat: {error.message}</p>
   }
-  if (!tables || !months.data) return <PageLoading />
+  if (!tables || !overview) return <PageLoading />
 
-  const cumulative = tables.kategori
-  const firstMonth = months.data[0]?.monthKey
-  const total = cumulative.footer?.[1]
   return (
     <>
-      <section
-        aria-label="Kumulatif per kategori"
-        className="grid grid-cols-2 gap-3 lg:grid-cols-4"
-      >
-        {cumulative.rows.map((row) => (
-          <Card key={String(row[0])} className="gap-1 px-4 py-3">
-            <p className="truncate text-xs font-medium text-muted-foreground">{String(row[0])}</p>
-            <p className="text-xl font-semibold tracking-tight tabular-nums">
-              {typeof row[1] === 'number' ? formatDigits(row[1]) : '–'}
+      <Card className="gap-0 py-0">
+        <div className="grid gap-6 p-5 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:p-6">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-muted-foreground">Total kendaraan</p>
+            <p className="text-4xl font-semibold tracking-tight tabular-nums">
+              {formatDigits(overview.total)}
             </p>
-            <p className="truncate text-xs text-muted-foreground">
-              {String(row[2] ?? '')} · sejak {String(row[3] ?? '')}
+            <p className="text-sm text-muted-foreground">
+              {overview.firstMonth
+                ? `sejak ${monthLabel(overview.firstMonth)}, Olsera + Kasiko`
+                : 'belum ada data'}
             </p>
-          </Card>
-        ))}
-        <Card className="gap-1 px-4 py-3 ring-2 ring-primary/40">
-          <p className="text-xs font-medium text-muted-foreground">Total kendaraan</p>
-          <p className="text-xl font-semibold tracking-tight tabular-nums">
-            {typeof total === 'number' ? formatDigits(total) : '–'}
-          </p>
-          <p className="truncate text-xs text-muted-foreground">
-            {firstMonth ? `sejak ${monthLabel(firstMonth)}` : 'belum ada data'}
-          </p>
-        </Card>
-      </section>
+            {overview.top && (
+              <p className="pt-3 text-sm">
+                <span className="text-muted-foreground">Terlaris: </span>
+                <span className="font-medium">{overview.top.name}</span>
+                <span className="text-muted-foreground tabular-nums">
+                  {' '}
+                  · {formatDigits(overview.top.vehicles)}
+                </span>
+              </p>
+            )}
+          </div>
+          <ul className="space-y-3 self-center" aria-label="Kumulatif per kategori">
+            {overview.categories.map((c) => (
+              <li key={c.id} className="space-y-1.5">
+                <div className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="truncate font-medium">{c.name}</span>
+                  <span className="shrink-0 tabular-nums">
+                    {formatDigits(c.vehicles)}
+                    <span className="ml-2 inline-block w-10 text-right text-muted-foreground">
+                      {Math.round(c.share * 100)}%
+                    </span>
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-muted" aria-hidden>
+                  <div
+                    className="h-1.5 rounded-full"
+                    style={{
+                      width: `${Math.max(c.share * 100, 1)}%`,
+                      backgroundColor: VEHICLE_SERIES,
+                    }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Card>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <ToggleGroup
-          type="single"
-          variant="outline"
-          value={view}
-          onValueChange={(value) => value && setView(value as VehicleView)}
-          aria-label="Tampilan kendaraan"
-          className="flex-wrap"
-        >
-          {VEHICLE_VIEWS.map((v) => (
-            <ToggleGroupItem key={v.id} value={v.id} className="h-10 px-4">
-              {v.label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground" id="vehicle-view-label">
+              Waktu
+            </p>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              value={view}
+              onValueChange={(value) => value && setView(value as VehicleView)}
+              aria-labelledby="vehicle-view-label"
+            >
+              {VEHICLE_VIEWS.map((v) => (
+                <ToggleGroupItem key={v.id} value={v.id} className={SEGMENT}>
+                  {v.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground" id="vehicle-detail-label">
+              Rincian
+            </p>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              value={detail}
+              onValueChange={(value) => value && setDetail(value as VehicleDetail)}
+              aria-labelledby="vehicle-detail-label"
+            >
+              {VEHICLE_DETAILS.map((d) => (
+                <ToggleGroupItem key={d.id} value={d.id} className={SEGMENT}>
+                  {d.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline">
+            <Button variant="outline" className="h-10">
               <DownloadIcon />
-              Ekspor kendaraan
+              Ekspor
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -456,7 +561,18 @@ function VehicleReport({ period }: { period: ReturnType<typeof usePeriod> }) {
         </DropdownMenu>
       </div>
 
-      <ReportTableView key={view} table={tables[view]} />
+      <section aria-labelledby="vehicle-table-title" className="space-y-2">
+        <h2 id="vehicle-table-title" className="text-sm font-semibold">
+          {tables[view].title} {detail === 'layanan' ? 'per jenis layanan' : 'per kategori'}
+          {view === 'harian' && (
+            <span className="font-normal text-muted-foreground">
+              {' '}
+              · {periodLabel(firstDayKey, lastDayKey)}
+            </span>
+          )}
+        </h2>
+        <ReportTableView key={`${view}-${detail}`} table={tables[view]} />
+      </section>
     </>
   )
 }

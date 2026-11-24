@@ -3,9 +3,11 @@
 
 import { formatRupiah } from '@/lib/money'
 
-export type AuditKind = 'harga' | 'katalog' | 'pengaturan' | 'akun' | 'pembatalan' | 'pengeluaran'
+export type AuditKind =
+  'koreksi' | 'harga' | 'katalog' | 'pengaturan' | 'akun' | 'pembatalan' | 'pengeluaran'
 
 export const AUDIT_KIND_LABEL: Record<AuditKind, string> = {
+  koreksi: 'Koreksi nota',
   harga: 'Harga',
   katalog: 'Katalog',
   pengaturan: 'Pengaturan',
@@ -16,6 +18,7 @@ export const AUDIT_KIND_LABEL: Record<AuditKind, string> = {
 
 /** The audit_log entities each filter asks the server for. */
 export const AUDIT_KIND_ENTITIES: Record<AuditKind, string[]> = {
+  koreksi: ['transactions'],
   harga: ['catalog_items'],
   katalog: ['catalog_items', 'catalog_categories', 'discounts'],
   pengaturan: ['businesses', 'expense_categories'],
@@ -154,6 +157,9 @@ export function describeAudit(
   if (row.entity === 'cashier_password') {
     return { kind: 'akun', title: 'Kata sandi kasir dibuka', subject: 'Akun kasir', changes: [] }
   }
+  if (row.action === 'correction') {
+    return { kind: 'koreksi', title: 'Nota dikoreksi', subject, changes: correctionChanges(row) }
+  }
   if (row.action === 'void') {
     const reason = typeof row.newData?.void_reason === 'string' ? row.newData.void_reason : null
     return {
@@ -188,4 +194,47 @@ export function actorLabel(actorId: string | null, roles: ReadonlyMap<string, st
   if (!actorId) return 'Sistem'
   const role = roles.get(actorId)
   return role === 'cashier' ? 'Kasir' : role === 'owner' ? 'Owner' : 'Pengguna lain'
+}
+
+interface CorrectionSnapshot {
+  plate_number?: unknown
+  total?: unknown
+  printed_total?: unknown
+  items?: unknown
+}
+
+const lineText = (line: unknown) => {
+  if (typeof line !== 'object' || line === null) return '–'
+  const { name, qty, price } = line as { name?: unknown; qty?: unknown; price?: unknown }
+  const amount = typeof price === 'number' ? formatRupiah(price) : '–'
+  return `${typeof name === 'string' ? name : '–'} ${typeof qty === 'number' ? qty : '?'} × ${amount}`
+}
+
+/** Line-by-line old → new of a receipt correction, the printed total, and the real income. */
+function correctionChanges(row: AuditRow): AuditChange[] {
+  const before = (row.oldData ?? {}) as CorrectionSnapshot
+  const after = (row.newData ?? {}) as CorrectionSnapshot
+  const oldItems = Array.isArray(before.items) ? (before.items as unknown[]) : []
+  const newItems = Array.isArray(after.items) ? (after.items as unknown[]) : []
+  const changes: AuditChange[] = []
+  for (let i = 0; i < Math.max(oldItems.length, newItems.length); i++) {
+    const from = i < oldItems.length ? lineText(oldItems[i]) : '–'
+    const to = i < newItems.length ? lineText(newItems[i]) : '–'
+    if (from !== to) changes.push({ field: `Baris ${i + 1}`, from, to })
+  }
+  const plate = (value: unknown) => (typeof value === 'string' && value !== '' ? value : '–')
+  if (plate(before.plate_number) !== plate(after.plate_number)) {
+    changes.push({ field: 'Plat', from: plate(before.plate_number), to: plate(after.plate_number) })
+  }
+  const income = typeof after.total === 'number' ? after.total : null
+  const printed = typeof after.printed_total === 'number' ? after.printed_total : null
+  if (income !== null && printed !== null) {
+    changes.push({ field: 'Total nota', from: formatRupiah(income), to: formatRupiah(printed) })
+    changes.push({
+      field: 'Pemasukan',
+      from: formatRupiah(income),
+      to: `${formatRupiah(income)} (tetap)`,
+    })
+  }
+  return changes
 }

@@ -72,6 +72,18 @@ export interface TransactionItem {
   lineTotal: number
 }
 
+/** One line of a corrected receipt (decision #44): what is printed, never income. */
+export interface ReceiptCorrectionLine {
+  name: string
+  qty: number
+  price: number
+}
+
+export interface ReceiptCorrection {
+  items: ReceiptCorrectionLine[]
+  plateNumber: string | null
+}
+
 export interface Transaction {
   id: string
   businessId: string
@@ -97,6 +109,9 @@ export interface Transaction {
   deviceId: string
   /** Set by the server on arrival (decision #17); null while only in the device outbox. */
   receivedAt: string | null
+  /** What the printed receipt shows after a correction (decision #44); income unchanged. */
+  receiptCorrection?: ReceiptCorrection | null
+  receiptCorrectedAt?: string | null
   /** The open order this sale settles (decision #34). */
   orderId: string | null
   items: TransactionItem[]

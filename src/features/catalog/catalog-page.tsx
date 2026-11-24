@@ -165,16 +165,17 @@ function CashierPriceCard({ businessId, allowed }: { businessId: string; allowed
             Kasir boleh edit nota
           </label>
           <p className="text-xs text-muted-foreground">
-            Bila aktif, tombol <strong>Edit nota</strong> muncul di layar pembayaran kasir: harga,
-            jumlah, dan item bisa diubah untuk nota itu saja sebelum disimpan dan dicetak. Harga
-            katalog tidak berubah; harga yang diubah terlihat di Detail transaksi.
+            Bila aktif, tombol <strong>Edit nota</strong> muncul di pratinjau nota kasir setelah
+            transaksi disimpan (hari yang sama): nama, jumlah, harga, dan plat di nota bisa
+            dikoreksi sebelum dicetak. Pemasukan tetap harga asli; setiap koreksi tercatat di Log
+            Audit.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Button asChild variant="ghost" size="sm">
-            <Link to="/owner/log-audit?jenis=harga">
+            <Link to="/owner/log-audit?jenis=koreksi">
               <HistoryIcon />
-              Riwayat harga katalog
+              Riwayat koreksi
             </Link>
           </Button>
           <Switch

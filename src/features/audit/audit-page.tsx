@@ -160,6 +160,8 @@ function groupByDay(entries: AuditEntry[], tz: string): [string, AuditEntry[]][]
 }
 
 const KIND_BADGE: Record<AuditKind, string> = {
+  koreksi:
+    'border-violet-300 bg-violet-50 text-violet-900 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-100',
   harga:
     'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100',
   katalog: '',

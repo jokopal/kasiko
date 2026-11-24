@@ -17,6 +17,7 @@ import { useOnlineStatus } from './use-online-status'
 const KIND_LABEL: Record<OutboxEntry['operation']['kind'], string> = {
   'transaction.create': 'Transaksi',
   'transaction.void': 'Pembatalan transaksi',
+  'transaction.correct': 'Koreksi nota',
   'expense.create': 'Pengeluaran',
   'expense.void': 'Pembatalan pengeluaran',
   'order.save': 'Pesanan',
@@ -31,6 +32,9 @@ function describe(entry: OutboxEntry): string {
   if (operation.kind === 'expense.create') return formatRupiah(operation.record.amount)
   if (operation.kind === 'order.save') {
     return `${operation.record.plateNumber ?? 'Tanpa plat'} · ${formatRupiah(operation.record.total)}`
+  }
+  if (operation.kind === 'transaction.correct') {
+    return `${operation.correction.items.length} baris nota`
   }
   return operation.reason
 }

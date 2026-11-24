@@ -28,6 +28,10 @@ export interface ReportColumn {
   money?: boolean
   /** Narrow column, used for the PDF and the spreadsheet width. */
   width?: number
+  /** Heading above a run of columns on screen (the category over its services). */
+  group?: string
+  /** A total column, drawn a little stronger on screen. */
+  strong?: boolean
 }
 
 export interface ReportTable {

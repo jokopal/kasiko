@@ -35,6 +35,15 @@ export const supabaseTransport: SyncTransport = {
           p_reason: operation.reason,
           p_voided_at: operation.voidedAt,
         })
+      case 'transaction.correct':
+        return call('correct_receipt', {
+          p_id: operation.targetId,
+          p_correction: {
+            items: operation.correction.items,
+            plate_number: operation.correction.plateNumber,
+          },
+          p_corrected_at: operation.correctedAt,
+        })
       case 'expense.void':
         return call('void_expense', {
           p_id: operation.targetId,

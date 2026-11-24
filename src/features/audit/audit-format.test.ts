@@ -101,3 +101,38 @@ describe('filters and actors', () => {
     expect(actorLabel(null, roles)).toBe('Sistem')
   })
 })
+
+describe('receipt corrections in the audit log (decision #44)', () => {
+  it('shows a Koreksi nota line with each changed line, the printed total and the kept income', () => {
+    const line = describeAudit({
+      actorId: 'k',
+      action: 'correction',
+      entity: 'transactions',
+      oldData: {
+        receipt_no: 'SMR-261124-A0001',
+        total: 50_000,
+        plate_number: 'B 1 A',
+        items: [{ name: 'Cuci Mobil Sedang', qty: 1, price: 50_000 }],
+      },
+      newData: {
+        receipt_no: 'SMR-261124-A0001',
+        total: 50_000,
+        printed_total: 45_000,
+        plate_number: 'B 1 A',
+        items: [{ name: 'Cuci Mobil Sedang', qty: 1, price: 45_000 }],
+      },
+    })
+    expect(line.kind).toBe('koreksi')
+    expect(line.title).toBe('Nota dikoreksi')
+    expect(line.subject).toBe('SMR-261124-A0001')
+    expect(line.changes).toEqual([
+      {
+        field: 'Baris 1',
+        from: 'Cuci Mobil Sedang 1 × Rp 50.000',
+        to: 'Cuci Mobil Sedang 1 × Rp 45.000',
+      },
+      { field: 'Total nota', from: 'Rp 50.000', to: 'Rp 45.000' },
+      { field: 'Pemasukan', from: 'Rp 50.000', to: 'Rp 50.000 (tetap)' },
+    ])
+  })
+})

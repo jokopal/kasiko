@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ReceiptDetail } from '@/features/receipt/receipt-detail'
+import { printedTransaction } from '@/features/receipt/receipt-correction'
 import { deviceCodeOf } from '@/features/receipt/receipt-number'
 import { formatDateTime } from '@/lib/datetime'
 import { formatRupiah } from '@/lib/money'
@@ -78,6 +79,20 @@ function TransactionRecord({
         <>
           <dt className="text-muted-foreground">Alasan batal</dt>
           <dd className="text-right text-destructive">{voidReason}</dd>
+        </>
+      )}
+      {transaction.receiptCorrection && (
+        <>
+          <dt className="text-muted-foreground">Nota dikoreksi</dt>
+          <dd className="space-y-0.5 text-right">
+            <p className="tabular-nums">
+              Tercetak {formatRupiah(printedTransaction(transaction).total)}
+            </p>
+            <p className="text-xs text-muted-foreground tabular-nums">
+              Pemasukan tetap {formatRupiah(transaction.total)} · asli:{' '}
+              {transaction.items.map((i) => `${i.nameSnapshot} ${i.qty}×`).join(', ')}
+            </p>
+          </dd>
         </>
       )}
       {edited.length > 0 && (

@@ -157,6 +157,12 @@ export interface TransactionRow {
   voided_at: string | null
   device_id: string
   order_id: string | null
+  /** Since migration 1100 (decision #44). */
+  receipt_correction?: {
+    items: { name: string; qty: number; price: number }[]
+    plate_number: string | null
+  } | null
+  receipt_corrected_at?: string | null
   /** Embedded as `transaction_items(*)` in selects, or `items` from the RPCs. */
   transaction_items?: TransactionItemRow[]
   items?: TransactionItemRow[]
@@ -188,6 +194,17 @@ export function toTransaction(row: TransactionRow): Transaction {
     deviceId: row.device_id,
     receivedAt: row.received_at,
     orderId: row.order_id,
+    receiptCorrection: row.receipt_correction
+      ? {
+          items: row.receipt_correction.items.map((l) => ({
+            name: l.name,
+            qty: l.qty,
+            price: l.price,
+          })),
+          plateNumber: row.receipt_correction.plate_number,
+        }
+      : null,
+    receiptCorrectedAt: row.receipt_corrected_at ?? null,
     items: items.map((item) => ({
       id: item.id,
       catalogItemId: item.catalog_item_id,

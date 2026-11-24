@@ -33,6 +33,18 @@ function merge<T extends Transaction | Expense>(
         sync,
         error: entry.lastError,
       })
+    } else if (operation.kind === 'transaction.correct') {
+      const current = rows.get(operation.targetId)
+      if (!current || !('receiptNo' in current.row)) continue
+      rows.set(operation.targetId, {
+        row: {
+          ...current.row,
+          receiptCorrection: operation.correction,
+          receiptCorrectedAt: operation.correctedAt,
+        },
+        sync,
+        error: entry.lastError,
+      })
     } else if (operation.kind === kinds.void) {
       const current = rows.get(operation.targetId)
       if (!current || current.row.status === 'void') continue

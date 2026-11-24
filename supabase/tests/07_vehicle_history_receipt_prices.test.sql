@@ -3,7 +3,7 @@
 -- match src/features/reports/vehicle-report.test.ts.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(9);
+select plan(11);
 
 insert into auth.users (id, email) values
   ('a0000000-0000-4000-8000-00000000000a', 'owner-a@kasiko.test'),
@@ -76,6 +76,18 @@ select results_eq(
     ('2026-02-01'::date, 'Cuci Motor', 'kasir', 2::bigint),
     ('2026-02-01'::date, 'Cuci Motor', 'olsera', 3::bigint)$$,
   'vehicles per month: live sales and Olsera reports, unlinked products and extras left out'
+);
+select results_eq(
+  $$select month_key, item_name, source, vehicles from public.vehicle_months('a0000000-0000-4000-8000-0000000000b0')
+    where category_name = 'Cuci Motor'$$,
+  $$values ('2026-02-01'::date, 'Cuci Motor', 'kasir', 2::bigint), ('2026-02-01'::date, 'Cuci Motor', 'olsera', 3::bigint)$$,
+  'each month row names its catalog item (migration 1000)'
+);
+select results_eq(
+  $$select day_key, item_name, vehicles from public.vehicle_days(
+    'a0000000-0000-4000-8000-0000000000b0', '2026-02-10 00:00+07', '2026-02-11 00:00+07')$$,
+  $$values ('2026-02-10'::date, 'Cuci Sedang', 1::bigint)$$,
+  'each day row names its catalog item'
 );
 
 set local request.jwt.claims to '{"sub":"a0000000-0000-4000-8000-00000000000c","role":"authenticated"}';
