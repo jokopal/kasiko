@@ -20,16 +20,23 @@ import { PageLoading } from '@/components/page-loading'
 import {
   BEGINNING_OF_RECORDS,
   fetchBusyHours,
-  fetchDailyTotals,
+  fetchDailySummary,
   fetchExpenseByCategory,
   fetchMonthlyTotals,
   fetchPeriodTotals,
   fetchTopItems,
+  fetchVehicleSummary,
 } from '@/features/data/owner'
 import { useOwnerData } from '@/features/data/owner-data'
 import { keys } from '@/features/data/query-client'
 import { OwnerPage } from '@/features/owner/page'
-import { formatShortDate, previousRange, startOfBusinessDayKey } from '@/lib/datetime'
+import {
+  businessDayKey,
+  formatShortDate,
+  previousRange,
+  shiftDayKey,
+  startOfBusinessDayKey,
+} from '@/lib/datetime'
 import { formatRupiah, formatRupiahCompact } from '@/lib/money'
 import {
   EXPENSE_KIND_LABEL,
@@ -40,6 +47,8 @@ import {
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { DashboardCustomizer } from './dashboard-customizer'
+import { AverageIncomePanel, DailyHistoryPanel, TodayStrip, VehiclesPanel } from './daily-panels'
+import { averageDailyIncome, dailyHistory, vehicleStats } from './daily-stats'
 import { kindLookup, monthKeysEnding, type MonthPoint, type PeriodTotals } from './finance'
 import { PeriodPicker } from './period-picker'
 import { SummaryCards } from './summary-cards'
@@ -86,6 +95,7 @@ const PANEL_SPAN: Partial<Record<PanelId, string>> = {
   trend: 'lg:col-span-2',
   monthly: 'lg:col-span-2',
   busyHours: 'lg:col-span-3',
+  history: 'lg:col-span-3',
 }
 
 export function DashboardPage() {
@@ -102,19 +112,30 @@ export function DashboardPage() {
     queryFn: async () => {
       const id = business.id
       const prior = previousRange(range)
-      const [current, previous, before, series, months, top, expenseMix, heat] = await Promise.all([
-        fetchPeriodTotals(id, range.from, range.to),
-        fetchPeriodTotals(id, prior.from, prior.to),
-        // Everything before the period: the base of the cumulative figures (#40).
-        fetchPeriodTotals(id, BEGINNING_OF_RECORDS, range.from),
-        fetchDailyTotals(id, period.firstDayKey, period.lastDayKey),
-        fetchMonthlyTotals(id, monthKeysEnding(period.lastDayKey, 12)),
-        fetchTopItems(id, range.from, range.to, 6),
-        fetchExpenseByCategory(id, range.from, range.to),
-        fetchBusyHours(id, range.from, range.to),
-      ])
-      return { current, previous, before, series, months, top, expenseMix, heat }
+      const [current, previous, before, series, months, top, expenseMix, heat, vehicles] =
+        await Promise.all([
+          fetchPeriodTotals(id, range.from, range.to),
+          fetchPeriodTotals(id, prior.from, prior.to),
+          // Everything before the period: the base of the cumulative figures (#40).
+          fetchPeriodTotals(id, BEGINNING_OF_RECORDS, range.from),
+          // Daily income/expense plus vehicles and transactions (#43).
+          fetchDailySummary(id, period.firstDayKey, period.lastDayKey),
+          fetchMonthlyTotals(id, monthKeysEnding(period.lastDayKey, 12)),
+          fetchTopItems(id, range.from, range.to, 6),
+          fetchExpenseByCategory(id, range.from, range.to),
+          fetchBusyHours(id, range.from, range.to),
+          fetchVehicleSummary(id, range.from, range.to),
+        ])
+      return { current, previous, before, series, months, top, expenseMix, heat, vehicles }
     },
+  })
+  // "Hari ini" stays on today whatever period is picked, and refreshes every minute.
+  const todayKey = businessDayKey(new Date(), tz)
+  const yesterdayKey = shiftDayKey(todayKey, -1)
+  const today = useQuery({
+    queryKey: keys.report(business.id, 'today', todayKey),
+    queryFn: () => fetchDailySummary(business.id, yesterdayKey, todayKey),
+    refetchInterval: 60_000,
   })
   const kindOf = useMemo(() => kindLookup(expenseCategories), [expenseCategories])
 
@@ -172,12 +193,19 @@ export function DashboardPage() {
       />
     ),
     busyHours: () => <BusyHoursHeatmap matrix={stats.heat} />,
+    history: () => (
+      <DailyHistoryPanel days={dailyHistory(stats.series)} tz={tz} reportSearch={location.search} />
+    ),
+    avgIncome: () => <AverageIncomePanel stats={averageDailyIncome(stats.series)} tz={tz} />,
+    vehicles: () => <VehiclesPanel stats={vehicleStats(stats.vehicles)} />,
   }
 
   const panelDescription: Partial<Record<PanelId, string>> = {
     paymentMethods: `${current.transactionCount} transaksi lunas${
       current.historicalIncome > 0 ? ' · data impor tanpa metode bayar' : ''
     }`,
+    topItems: 'Data kasir + laporan Olsera untuk bulan yang tercakup penuh',
+    vehicles: `${PANEL_INFO.vehicles.hint} · tambahan & salon tidak dihitung`,
     expenseMix: [
       `Kasir ${formatRupiah(current.drawerExpense)}`,
       `Owner ${formatRupiah(current.ownerExpense)}`,
@@ -214,6 +242,14 @@ export function DashboardPage() {
         </>
       }
     >
+      <TodayStrip
+        data={today.data}
+        error={today.error}
+        todayKey={todayKey}
+        yesterdayKey={yesterdayKey}
+        tz={tz}
+      />
+
       <SummaryCards
         summary={flowSummary(current, stats.before)}
         previous={{

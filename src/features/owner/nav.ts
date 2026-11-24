@@ -1,11 +1,13 @@
 import {
   FileSpreadsheetIcon,
   LayoutDashboardIcon,
+  MonitorSmartphoneIcon,
   PackageIcon,
   PercentIcon,
   PiggyBankIcon,
   ReceiptTextIcon,
   SettingsIcon,
+  ShieldCheckIcon,
   TableIcon,
   TagsIcon,
   UserCogIcon,
@@ -45,6 +47,8 @@ export const OWNER_NAV: { label: string; items: OwnerNavItem[] }[] = [
       { to: '/owner/kategori-pengeluaran', label: 'Kategori Pengeluaran', icon: TagsIcon },
       { to: '/owner/pengaturan', label: 'Pengaturan Usaha', icon: SettingsIcon },
       { to: '/owner/akun-kasir', label: 'Akun Kasir', icon: UserCogIcon },
+      { to: '/owner/pratinjau-kasir', label: 'Pratinjau Kasir', icon: MonitorSmartphoneIcon },
+      { to: '/owner/log-audit', label: 'Log Audit', icon: ShieldCheckIcon },
     ],
   },
 ]

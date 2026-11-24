@@ -1,5 +1,6 @@
 import type { CatalogSnapshot } from '@/features/offline/db'
 import { getSupabase } from '@/lib/supabase'
+import { callRpc } from './rpc'
 import type { Expense, Order, Transaction } from '@/lib/types'
 import {
   toBusiness,
@@ -107,4 +108,17 @@ export async function fetchOrders(businessId: string): Promise<Order[]> {
     .eq('business_id', businessId)
     .order('opened_at')
   return rowsOf<OrderRow>(result).map(toOrder)
+}
+
+/**
+ * Decision #44: the cashier changes one catalog price, online only, while the owner allows
+ * it. Returns the previous price; past transactions keep their own price snapshot.
+ */
+export async function setItemPriceAsCashier(itemId: string, price: number): Promise<number> {
+  const { data, error } = await callRpc('cashier_set_item_price', {
+    p_item_id: itemId,
+    p_price: price,
+  })
+  if (error) throw new Error(error.message)
+  return data as number
 }

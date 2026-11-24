@@ -1,8 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
-import { KeyRoundIcon, UserIcon, UserPlusIcon } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import {
+  CheckIcon,
+  CopyIcon,
+  EyeIcon,
+  EyeOffIcon,
+  KeyRoundIcon,
+  MonitorSmartphoneIcon,
+  UserIcon,
+  UserPlusIcon,
+} from 'lucide-react'
+import { useState, type FormEvent, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { PageLoading } from '@/components/page-loading'
+import { PasswordInput } from '@/components/password-input'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -21,14 +32,20 @@ import {
   createCashier,
   fetchCashierAccount,
   resetCashierPassword,
+  revealCashierPassword,
   setCashierActive,
 } from '@/features/data/owner-actions'
 import { useOwnerData } from '@/features/data/owner-data'
 import { keys, queryClient } from '@/features/data/query-client'
 import { OwnerPage } from '@/features/owner/page'
+import type { CashierAccount } from '@/lib/types'
+import { cn } from '@/lib/utils'
 import { passwordProblem, usernameProblem } from '../../../supabase/functions/_shared/accounts'
 
-/** Decision #4: one shared cashier account per business, managed by the owner. */
+/**
+ * Decision #4: one shared cashier account per business, managed by the owner. Decision #46:
+ * the owner sees the username, the sign-in email and (on request, logged) the password.
+ */
 export function CashierAccountPage() {
   const { business } = useOwnerData()
   const [resetOpen, setResetOpen] = useState(false)
@@ -61,32 +78,12 @@ export function CashierAccountPage() {
       ) : query.error ? (
         <p className="text-sm text-destructive">Akun kasir gagal dimuat: {query.error.message}</p>
       ) : account ? (
-        <Card className="max-w-2xl">
-          <CardHeader className="flex flex-row items-center gap-3">
-            <span className="flex size-11 items-center justify-center rounded-full bg-muted">
-              <UserIcon className="size-5" aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <CardTitle className="truncate">{account.username ?? 'Akun kasir'}</CardTitle>
-              <CardDescription>Nama pengguna untuk masuk di perangkat kasir</CardDescription>
-            </div>
-            <Badge variant={account.isActive ? 'default' : 'secondary'}>
-              {account.isActive ? 'Aktif' : 'Nonaktif'}
-            </Badge>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setResetOpen(true)}>
-              <KeyRoundIcon />
-              Reset kata sandi
-            </Button>
-            <Button
-              variant={account.isActive ? 'destructive' : 'default'}
-              onClick={() => void toggleActive()}
-            >
-              {account.isActive ? 'Nonaktifkan' : 'Aktifkan'}
-            </Button>
-          </CardContent>
-        </Card>
+        <AccountCard
+          businessId={business.id}
+          account={account}
+          onReset={() => setResetOpen(true)}
+          onToggleActive={() => void toggleActive()}
+        />
       ) : (
         <CreateCashierCard businessId={business.id} onCreated={() => void refresh()} />
       )}
@@ -94,20 +91,187 @@ export function CashierAccountPage() {
       <Alert className="max-w-2xl">
         <AlertTitle>Keamanan akun kasir</AlertTitle>
         <AlertDescription>
-          Reset kata sandi atau nonaktifkan akun akan mengeluarkan semua perangkat kasir. Data
-          transaksi yang belum tersinkron di perangkat tetap disimpan dan dikirim setelah kasir
-          masuk kembali.
+          Kata sandi kasir disimpan terenkripsi dan hanya bisa dibuka owner; setiap kali dibuka
+          tercatat di Log Audit. Reset kata sandi atau nonaktifkan akun akan mengeluarkan semua
+          perangkat kasir. Data yang belum tersinkron di perangkat tetap dikirim setelah kasir masuk
+          kembali.
         </AlertDescription>
       </Alert>
 
       <Dialog open={resetOpen} onOpenChange={setResetOpen}>
         <DialogContent className="sm:max-w-sm">
           {resetOpen && (
-            <ResetPasswordForm businessId={business.id} onDone={() => setResetOpen(false)} />
+            <ResetPasswordForm
+              businessId={business.id}
+              onDone={() => {
+                setResetOpen(false)
+                void refresh()
+              }}
+            />
           )}
         </DialogContent>
       </Dialog>
     </OwnerPage>
+  )
+}
+
+function AccountCard({
+  businessId,
+  account,
+  onReset,
+  onToggleActive,
+}: {
+  businessId: string
+  account: CashierAccount
+  onReset: () => void
+  onToggleActive: () => void
+}) {
+  const [password, setPassword] = useState<string | null>(null)
+  const [revealing, setRevealing] = useState(false)
+
+  async function toggleReveal() {
+    if (password !== null) {
+      setPassword(null)
+      return
+    }
+    setRevealing(true)
+    const result = await revealCashierPassword(businessId)
+    setRevealing(false)
+    if (!result.ok) {
+      toast.error(result.error)
+      return
+    }
+    if (result.value === null) {
+      toast.error('Kata sandi belum tersimpan. Reset sekali agar bisa dilihat di sini.')
+      return
+    }
+    setPassword(result.value)
+  }
+
+  return (
+    <Card className="max-w-2xl">
+      <CardHeader className="flex flex-row items-center gap-3">
+        <span className="flex size-11 items-center justify-center rounded-full bg-muted">
+          <UserIcon className="size-5" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <CardTitle className="truncate">{account.username ?? 'Akun kasir'}</CardTitle>
+          <CardDescription>Dipakai bersama di perangkat kasir</CardDescription>
+        </div>
+        <Badge variant={account.isActive ? 'default' : 'secondary'}>
+          {account.isActive ? 'Aktif' : 'Nonaktif'}
+        </Badge>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <dl className="divide-y rounded-lg border">
+          <CredentialRow
+            label="Nama pengguna"
+            value={account.username ?? '-'}
+            hint="Diketik di halaman masuk kasir"
+          />
+          <CredentialRow
+            label="Email login"
+            value={account.email ?? '-'}
+            hint="Alamat internal, tidak menerima email"
+          />
+          <CredentialRow
+            label="Kata sandi"
+            value={password ?? '••••••••'}
+            masked={password === null}
+            copyable={password !== null}
+            hint={
+              account.hasStoredPassword
+                ? 'Setiap kali dibuka tercatat di Log Audit'
+                : 'Belum tersimpan. Reset kata sandi sekali agar bisa dilihat di sini.'
+            }
+            action={
+              account.hasStoredPassword && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={revealing}
+                  onClick={() => void toggleReveal()}
+                  aria-pressed={password !== null}
+                >
+                  {password === null ? <EyeIcon /> : <EyeOffIcon />}
+                  {revealing ? 'Membuka…' : password === null ? 'Lihat' : 'Sembunyikan'}
+                </Button>
+              )
+            }
+          />
+        </dl>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={onReset}>
+            <KeyRoundIcon />
+            Reset kata sandi
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/owner/pratinjau-kasir">
+              <MonitorSmartphoneIcon />
+              Pratinjau kasir
+            </Link>
+          </Button>
+          <Button variant={account.isActive ? 'destructive' : 'default'} onClick={onToggleActive}>
+            {account.isActive ? 'Nonaktifkan' : 'Aktifkan'}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function CredentialRow({
+  label,
+  value,
+  hint,
+  masked = false,
+  copyable = true,
+  action,
+}: {
+  label: string
+  value: string
+  hint: string
+  masked?: boolean
+  copyable?: boolean
+  action?: ReactNode
+}) {
+  const [copied, setCopied] = useState(false)
+  function copy() {
+    void navigator.clipboard.writeText(value).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  return (
+    <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
+      <div className="min-w-0 flex-1">
+        <dt className="text-xs text-muted-foreground">{label}</dt>
+        <dd
+          className={cn(
+            'truncate font-mono text-sm',
+            masked && 'tracking-widest text-muted-foreground',
+          )}
+          aria-live="polite"
+        >
+          {value}
+        </dd>
+        <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
+      </div>
+      <div className="flex shrink-0 gap-2">
+        {action}
+        {copyable && value !== '-' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={copy}
+            aria-label={`Salin ${label.toLowerCase()}`}
+          >
+            {copied ? <CheckIcon /> : <CopyIcon />}
+            {copied ? 'Tersalin' : 'Salin'}
+          </Button>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -149,8 +313,8 @@ function CreateCashierCard({
           Buat akun kasir
         </CardTitle>
         <CardDescription>
-          Kasir masuk dengan nama pengguna ini di perangkat kasir. Simpan kata sandinya di tempat
-          aman.
+          Kasir masuk dengan nama pengguna ini di perangkat kasir. Kata sandinya bisa dilihat lagi
+          di halaman ini.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -173,9 +337,8 @@ function CreateCashierCard({
             </Field>
             <Field>
               <FieldLabel htmlFor="cashier-password">Kata sandi</FieldLabel>
-              <Input
+              <PasswordInput
                 id="cashier-password"
-                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
@@ -221,14 +384,14 @@ function ResetPasswordForm({ businessId, onDone }: { businessId: string; onDone:
       <DialogHeader>
         <DialogTitle>Reset kata sandi kasir</DialogTitle>
         <DialogDescription>
-          Semua perangkat kasir akan keluar dan perlu masuk lagi.
+          Semua perangkat kasir akan keluar dan perlu masuk lagi. Kata sandi baru tersimpan
+          terenkripsi dan bisa dilihat lagi di halaman ini.
         </DialogDescription>
       </DialogHeader>
       <Field data-invalid={error !== null}>
         <FieldLabel htmlFor="new-cashier-password">Kata sandi baru</FieldLabel>
-        <Input
+        <PasswordInput
           id="new-cashier-password"
-          type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="new-password"

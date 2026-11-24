@@ -20,6 +20,8 @@ export interface ExpenseCategoryTemplate {
 
 export interface CatalogTemplate {
   category: string
+  /** Each service here is one vehicle (decision #43); default true, false for add-ons. */
+  countsVehicles?: boolean
   items: { name: string; price: number }[]
 }
 
@@ -30,6 +32,11 @@ export interface BusinessTemplate {
   catalog: CatalogTemplate[]
   expenseCategories: ExpenseCategoryTemplate[]
   dashboard: DashboardLayout
+  /**
+   * Product names in other POS reports (Olsera) per catalog item name, so an item-sales
+   * import links them without asking (decision #45). Names only, never figures.
+   */
+  itemAliases?: Record<string, string[]>
 }
 
 const layout = (panels: PanelId[], hidden: PanelId[]): DashboardLayout => ({
@@ -40,10 +47,11 @@ const layout = (panels: PanelId[], hidden: PanelId[]): DashboardLayout => ({
   ],
 })
 
-// Decision #40: three panels under the summary; the rest can be switched on.
+// Decision #40: three panels under the summary, plus the daily history (#43); the rest,
+// including average daily income and vehicles per day, can be switched on.
 const SIMPLE_PANELS = layout(
-  ['trend', 'monthly', 'expenseMix'],
-  ['paymentMethods', 'topItems', 'busyHours'],
+  ['trend', 'monthly', 'expenseMix', 'history'],
+  ['paymentMethods', 'topItems', 'busyHours', 'avgIncome', 'vehicles'],
 )
 
 const op = (
@@ -69,33 +77,62 @@ const CAR_WASH: BusinessTemplate = {
   name: 'Cuci Mobil',
   description:
     'Layanan cuci & detailing, gaji komisi harian, biaya laci harian, cicilan dan prive terpisah.',
+  itemAliases: {
+    'Cuci Mobil Kecil': ['Mobil Kecil'],
+    'Cuci Mobil Sedang': ['Mobil Sedang'],
+    'Cuci Mobil Besar / SUV': ['Mobil Besar'],
+    'Cuci Mobil 4x4': ['Double Cabin 4x4'],
+    'Cuci Mobil Kecil Tanpa Kolong': ['Mobil Kecil + Interior Tanpa Hidrolik'],
+    'Cuci Mobil Sedang Tanpa Kolong': ['Mobil Sedang + Interior tanpa Hidrolik'],
+    'Cuci Mobil Besar Tanpa Kolong': ['Mobil Besar + Interior Tanpa Hidrolik'],
+    'Cuci Mobil Kecil Tanpa Kolong & Interior': ['Mobil Kecil Tanpa Hidrolik dan Interior'],
+    'Cuci Mobil Sedang Tanpa Kolong & Interior': ['Mobil Sedang Tanpa hidrolik dan Interior'],
+    'Cuci Mobil Besar Tanpa Kolong & Interior': ['Mobil Besar Tanpa Hidrolik dan Interior'],
+    'Cuci Motor Kecil': ['Cuci Motor 100-145 CC'],
+    'Cuci Motor Besar': ['Cuci Motor 150-UP CC', 'Motor 250 cc up'],
+    'Cuci Truk': ['truck', 'Colt Diesel'],
+  },
   catalog: [
     {
-      category: 'Cuci',
+      category: 'Cuci Mobil',
       items: [
-        { name: 'Cuci Mobil Kecil', price: 35_000 },
-        { name: 'Cuci Mobil Sedang', price: 45_000 },
+        { name: 'Cuci Mobil Kecil', price: 45_000 },
+        { name: 'Cuci Mobil Sedang', price: 50_000 },
         { name: 'Cuci Mobil Besar / SUV', price: 55_000 },
-        { name: 'Cuci Pick-up', price: 50_000 },
-        { name: 'Cuci Motor', price: 15_000 },
+        { name: 'Cuci Mobil 4x4', price: 60_000 },
+      ],
+    },
+    {
+      category: 'Cuci Motor',
+      items: [
+        { name: 'Cuci Motor Kecil', price: 15_000 },
+        { name: 'Cuci Motor Besar', price: 20_000 },
+      ],
+    },
+    {
+      category: 'Kendaraan Besar',
+      items: [
+        { name: 'Cuci Hiace', price: 85_000 },
+        { name: 'Cuci Truk', price: 100_000 },
       ],
     },
     {
       category: 'Salon & Detailing',
+      countsVehicles: false,
       items: [
         { name: 'Salon Interior', price: 300_000 },
         { name: 'Poles Body', price: 350_000 },
-        { name: 'Cuci Mesin', price: 75_000 },
         { name: 'Cuci Kolong', price: 40_000 },
       ],
     },
     {
       category: 'Tambahan',
+      countsVehicles: false,
       items: [
+        { name: 'Cuci Mesin Mobil', price: 10_000 },
+        { name: 'Cuci Karpet', price: 10_000 },
         { name: 'Semir Ban', price: 10_000 },
         { name: 'Pewangi', price: 10_000 },
-        { name: 'Vakum Interior', price: 15_000 },
-        { name: 'Fogging AC', price: 50_000 },
       ],
     },
   ],

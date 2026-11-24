@@ -109,6 +109,27 @@ describe('dashboard layout', () => {
     ])
   })
 
+  it('appends listed new ids visible, the rest hidden', () => {
+    const entries = normalizeEntries([{ id: 'a', visible: true }], ['a', 'b', 'c'] as const, ['c'])
+    expect(entries).toEqual([
+      { id: 'a', visible: true },
+      { id: 'b', visible: false },
+      { id: 'c', visible: true },
+    ])
+  })
+
+  it('shows the daily history on a layout saved before it existed, other new panels hidden', () => {
+    const saved = {
+      version: LAYOUT_VERSION,
+      panels: [
+        { id: 'trend' as const, visible: true },
+        { id: 'monthly' as const, visible: false },
+      ],
+    }
+    const layout = savedLayout(saved, normalizeLayout({ panels: [] }))
+    expect(visibleIds(layout.panels)).toEqual(['trend', 'history'])
+  })
+
   it('moves and toggles entries', () => {
     const entries = [
       { id: 'a', visible: true },
@@ -122,8 +143,8 @@ describe('dashboard layout', () => {
   it('normalizes every template layout to the full set of widgets', () => {
     for (const template of BUSINESS_TEMPLATES) {
       const layout = normalizeLayout(template.dashboard)
-      expect(layout.panels).toHaveLength(6)
-      expect(visibleIds(layout.panels)).toEqual(['trend', 'monthly', 'expenseMix'])
+      expect(layout.panels).toHaveLength(9)
+      expect(visibleIds(layout.panels)).toEqual(['trend', 'monthly', 'expenseMix', 'history'])
     }
   })
 
@@ -133,6 +154,7 @@ describe('dashboard layout', () => {
     expect(savedLayout(old, template)).toEqual(template)
     expect(savedLayout(null, template)).toEqual(template)
     const current = { version: LAYOUT_VERSION, panels: old.panels }
-    expect(visibleIds(savedLayout(current, template).panels)).toEqual(['busyHours'])
+    // The daily history (decision #43) joins a saved layout once, visible.
+    expect(visibleIds(savedLayout(current, template).panels)).toEqual(['busyHours', 'history'])
   })
 })

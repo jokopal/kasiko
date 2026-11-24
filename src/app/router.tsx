@@ -107,6 +107,14 @@ export const routes: RouteObject[] = [
             element: page(() => import('@/features/business/settings-page'), 'SettingsPage'),
           },
           {
+            path: 'pratinjau-kasir',
+            element: page(() => import('@/features/pos/kasir-preview-page'), 'KasirPreviewPage'),
+          },
+          {
+            path: 'log-audit',
+            element: page(() => import('@/features/audit/audit-page'), 'AuditPage'),
+          },
+          {
             path: 'akun-kasir',
             element: page(
               () => import('@/features/auth/cashier-account-page'),

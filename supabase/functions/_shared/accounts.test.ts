@@ -41,6 +41,10 @@ describe('parseCashierRequest', () => {
       ok: true,
       value: { action: 'get', businessId },
     })
+    expect(parseCashierRequest({ action: 'reveal_password', businessId })).toEqual({
+      ok: true,
+      value: { action: 'reveal_password', businessId },
+    })
     expect(
       parseCashierRequest({
         action: 'create',

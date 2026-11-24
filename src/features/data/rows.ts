@@ -39,6 +39,7 @@ export interface BusinessRow {
   opening_cash?: number
   opening_reserve?: number
   drawer_float?: number
+  cashier_can_edit_prices?: boolean
   is_active: boolean
 }
 
@@ -56,11 +57,12 @@ export function toBusiness(row: BusinessRow, logoUrl: string | null = null): Bus
     openingCash: row.opening_cash ?? 0,
     drawerFloat: row.drawer_float ?? 0,
     openingReserve: row.opening_reserve ?? 0,
+    cashierCanEditPrices: row.cashier_can_edit_prices ?? false,
     isActive: row.is_active,
   }
 }
 
-export interface CatalogCategoryRow {
+interface NamedRow {
   id: string
   business_id: string
   name: string
@@ -68,7 +70,7 @@ export interface CatalogCategoryRow {
   is_active: boolean
 }
 
-export const toCatalogCategory = (row: CatalogCategoryRow): CatalogCategory => ({
+const toNamed = (row: NamedRow) => ({
   id: row.id,
   businessId: row.business_id,
   name: row.name,
@@ -76,37 +78,47 @@ export const toCatalogCategory = (row: CatalogCategoryRow): CatalogCategory => (
   isActive: row.is_active,
 })
 
-export interface CatalogItemRow extends CatalogCategoryRow {
+export interface CatalogCategoryRow extends NamedRow {
+  /** Absent in rows cached before decision #43. */
+  counts_vehicles?: boolean
+}
+
+export const toCatalogCategory = (row: CatalogCategoryRow): CatalogCategory => ({
+  ...toNamed(row),
+  countsVehicles: row.counts_vehicles ?? true,
+})
+
+export interface CatalogItemRow extends NamedRow {
   category_id: string
   price: number
 }
 
 export const toCatalogItem = (row: CatalogItemRow): CatalogItem => ({
-  ...toCatalogCategory(row),
+  ...toNamed(row),
   categoryId: row.category_id,
   price: row.price,
 })
 
-export interface ExpenseCategoryRow extends CatalogCategoryRow {
+export interface ExpenseCategoryRow extends NamedRow {
   kind: ExpenseKind
   allow_drawer: boolean
   requires_note?: boolean
 }
 
 export const toExpenseCategory = (row: ExpenseCategoryRow): ExpenseCategory => ({
-  ...toCatalogCategory(row),
+  ...toNamed(row),
   kind: row.kind,
   allowDrawer: row.allow_drawer,
   requiresNote: row.requires_note ?? false,
 })
 
-export interface DiscountRow extends CatalogCategoryRow {
+export interface DiscountRow extends NamedRow {
   type: DiscountType
   value: number
 }
 
 export const toDiscount = (row: DiscountRow): Discount => ({
-  ...toCatalogCategory(row),
+  ...toNamed(row),
   type: row.type,
   value: row.value,
 })

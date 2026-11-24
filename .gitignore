@@ -41,6 +41,7 @@ test-results
 
 # Owner business data (never commit)
 *.xlsx
+datareal/
 *.xls
 
 # Supabase credentials (never commit)

@@ -33,6 +33,8 @@ export interface Business {
   drawerFloat: number
   /** Uang dingin: the reserve's opening balance, kept out of free cash; owner only. */
   openingReserve: number
+  /** The owner lets the cashier change catalog prices online (decision #44). */
+  cashierCanEditPrices: boolean
   isActive: boolean
 }
 
@@ -42,6 +44,8 @@ export interface CatalogCategory {
   name: string
   sortOrder: number
   isActive: boolean
+  /** Each service in this category is one vehicle; add-ons are not (decision #43). */
+  countsVehicles: boolean
 }
 
 export interface CatalogItem {
@@ -129,7 +133,11 @@ export interface Order {
 
 export interface CashierAccount {
   username: string | null
+  /** The sign-in email behind the username (`<username>@kasir.kasiko.invalid`). */
+  email: string | null
   isActive: boolean
+  /** A copy of the password is kept in the vault (decision #46). */
+  hasStoredPassword: boolean
 }
 
 export interface ExpenseCategory {

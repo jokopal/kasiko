@@ -1,6 +1,7 @@
 // manage-cashier: the owner creates, resets and (de)activates the single cashier account of
-// a business (decision #4, AGENTS.md section 5). Called with the owner's JWT; account
-// changes use the service role, which only exists here, never in the app.
+// a business (decision #4, AGENTS.md section 5) and can look up its password, which is kept
+// encrypted in Supabase Vault (decision #46). Called with the owner's JWT; account changes
+// and the vault use the service role, which only exists here, never in the app.
 import { createClient } from 'npm:@supabase/supabase-js@2.117.3'
 import {
   cashierEmail,
@@ -35,6 +36,9 @@ Deno.serve(async (req) => {
   if (ownerError || isOwner !== true) {
     return json({ error: 'Hanya owner usaha ini yang bisa mengatur akun kasir' }, 403)
   }
+  // Who looked at the password goes into the audit log (decision #46).
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+  const { data: caller } = await asCaller.auth.getUser(token)
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -51,6 +55,14 @@ Deno.serve(async (req) => {
     const { error } = await admin.rpc('admin_revoke_sessions', { p_user_id: userId })
     if (error) throw error
   }
+  // Decision #46: the owner can look the password up later.
+  const storePassword = async (password: string) => {
+    const { error } = await admin.rpc('cashier_password_save', {
+      p_business_id: request.businessId,
+      p_password: password,
+    })
+    if (error) throw error
+  }
 
   try {
     switch (request.action) {
@@ -58,9 +70,28 @@ Deno.serve(async (req) => {
         if (!member) return json({ account: null })
         const { data, error } = await admin.auth.admin.getUserById(member.user_id)
         if (error) throw error
-        return json({
-          account: { username: usernameFromEmail(data.user.email), isActive: member.is_active },
+        const { data: stored, error: statusError } = await admin.rpc('cashier_password_status', {
+          p_business_id: request.businessId,
         })
+        if (statusError) throw statusError
+        return json({
+          account: {
+            username: usernameFromEmail(data.user.email),
+            email: data.user.email ?? null,
+            isActive: member.is_active,
+            hasStoredPassword: stored === true,
+          },
+        })
+      }
+
+      case 'reveal_password': {
+        if (!member) return json({ error: 'Akun kasir belum dibuat' }, 404)
+        const { data, error } = await admin.rpc('cashier_password_read', {
+          p_business_id: request.businessId,
+          p_actor: caller.user?.id ?? null,
+        })
+        if (error) throw error
+        return json({ password: typeof data === 'string' ? data : null })
       }
 
       case 'create': {
@@ -82,7 +113,18 @@ Deno.serve(async (req) => {
           await admin.auth.admin.deleteUser(data.user.id)
           throw insertError
         }
-        return json({ account: { username: request.username, isActive: true } }, 201)
+        await storePassword(request.password)
+        return json(
+          {
+            account: {
+              username: request.username,
+              email: cashierEmail(request.username),
+              isActive: true,
+              hasStoredPassword: true,
+            },
+          },
+          201,
+        )
       }
 
       case 'reset_password': {
@@ -91,6 +133,7 @@ Deno.serve(async (req) => {
           password: request.password,
         })
         if (error) throw error
+        await storePassword(request.password)
         // Every cashier device signs in again with the new password (decision #22).
         await revokeSessions(member.user_id)
         return json({ ok: true })

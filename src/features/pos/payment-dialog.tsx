@@ -64,7 +64,7 @@ export function PaymentDialog({ open, onOpenChange }: PaymentDialogProps) {
 }
 
 function PaymentForm({ onSaved }: { onSaved: (transaction: Transaction) => void }) {
-  const { business, device, discounts } = useKasirData()
+  const { business, device, discounts, preview } = useKasirData()
   const { lines, total: subtotal, plateNumber, order } = useCart()
   const [saving, setSaving] = useState(false)
   // Decision #35: only presets the owner switched on, and only ones below the subtotal.
@@ -95,6 +95,10 @@ function PaymentForm({ onSaved }: { onSaved: (transaction: Transaction) => void 
   async function save() {
     // `saving` blocks a double tap from recording the sale twice.
     if (!canSave || saving) return
+    if (preview) {
+      toast.info('Pratinjau: transaksi tidak disimpan')
+      return
+    }
     setSaving(true)
     try {
       const result = await recordSale({

@@ -55,6 +55,7 @@ import {
   type ParsedWorkbook,
 } from './cashflow-import'
 import { ImportTemplateCard } from './import-template-card'
+import { OlseraImportCard } from './olsera-import-card'
 
 const SOURCE_LABEL: Record<MappingSource, string> = {
   tag: 'Tag',
@@ -333,6 +334,7 @@ export function ImportPage() {
               </Card>
             </>
           )}
+          <OlseraImportCard />
         </div>
 
         <div className="space-y-4">

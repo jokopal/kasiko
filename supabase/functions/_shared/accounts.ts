@@ -43,6 +43,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export type CashierRequest =
   | { action: 'get'; businessId: string }
+  | { action: 'reveal_password'; businessId: string }
   | { action: 'create'; businessId: string; username: string; password: string }
   | { action: 'reset_password'; businessId: string; password: string }
   | { action: 'set_active'; businessId: string; active: boolean }
@@ -61,6 +62,7 @@ export function parseCashierRequest(body: unknown): Parsed<CashierRequest> {
   }
   switch (action) {
     case 'get':
+    case 'reveal_password':
       return { ok: true, value: { action, businessId } }
     case 'create': {
       const username = normalizeUsername(String(body.username ?? ''))

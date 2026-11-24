@@ -1,4 +1,13 @@
-import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon } from 'lucide-react'
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CarFrontIcon,
+  HistoryIcon,
+  PencilIcon,
+  PlusIcon,
+  SettingsIcon,
+} from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { RupiahInput } from '@/components/rupiah-input'
@@ -30,6 +39,8 @@ import {
   saveCatalogCategory,
   saveCatalogItem,
   setActive,
+  setCashierCanEditPrices,
+  setCategoryCountsVehicles,
 } from '@/features/data/owner-actions'
 import { useOwnerData } from '@/features/data/owner-data'
 import { notify } from '@/features/data/notify'
@@ -55,6 +66,7 @@ export function CatalogPage() {
         </TabsList>
 
         <TabsContent value="items" className="mt-4 space-y-4">
+          <CashierPriceCard businessId={business.id} allowed={business.cashierCanEditPrices} />
           <div className="flex justify-end">
             <Button
               onClick={() =>
@@ -75,6 +87,9 @@ export function CatalogPage() {
                 <CardHeader className="flex flex-row items-center gap-2 border-b py-3">
                   <CardTitle className="text-base">{category.name}</CardTitle>
                   {!category.isActive && <Badge variant="secondary">Nonaktif</Badge>}
+                  {!category.countsVehicles && (
+                    <Badge variant="outline">Tidak dihitung kendaraan</Badge>
+                  )}
                   <span className="ml-auto text-xs text-muted-foreground">
                     {items.length} layanan
                   </span>
@@ -134,6 +149,41 @@ export function CatalogPage() {
         </DialogContent>
       </Dialog>
     </OwnerPage>
+  )
+}
+
+/** Decision #44: the owner decides whether the cashier may change prices from the till. */
+function CashierPriceCard({ businessId, allowed }: { businessId: string; allowed: boolean }) {
+  return (
+    <Card className="gap-0 py-0">
+      <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+        <span className="hidden size-9 shrink-0 items-center justify-center rounded-lg bg-muted sm:flex">
+          <SettingsIcon className="size-4" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <label htmlFor="cashier-can-edit-prices" className="text-sm font-medium">
+            Kasir boleh ubah harga
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Bila aktif, tombol harga (ikon gerigi) muncul di layar kasir. Perubahan harus online,
+            transaksi lama tetap memakai harga lamanya, dan setiap perubahan tercatat di Log Audit.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/owner/log-audit?jenis=harga">
+              <HistoryIcon />
+              Riwayat harga
+            </Link>
+          </Button>
+          <Switch
+            id="cashier-can-edit-prices"
+            checked={allowed}
+            onCheckedChange={(checked) => notify(setCashierCanEditPrices(businessId, checked))}
+          />
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -338,6 +388,11 @@ function CategoryEditor({ businessId, rows }: { businessId: string; rows: Catalo
         </Button>
       </CardHeader>
       <CardContent className="px-0">
+        <p className="flex items-center gap-1.5 border-b px-3 py-2 text-xs text-muted-foreground sm:px-4">
+          <CarFrontIcon className="size-3.5 shrink-0" aria-hidden />
+          Tombol Kendaraan menyala: setiap layanan di kategori itu dihitung 1 kendaraan. Matikan
+          untuk tambahan seperti cuci mesin atau karpet.
+        </p>
         <ul className="divide-y">
           {rows.map((row, index) => (
             <li key={row.id} className="flex items-center gap-2 px-3 py-2 sm:px-4">
@@ -357,6 +412,19 @@ function CategoryEditor({ businessId, rows }: { businessId: string; rows: Catalo
                   notify(moveCatalogCategory(businessId, rows, id, direction))
                 }
               />
+              <Button
+                variant={row.countsVehicles ? 'secondary' : 'ghost'}
+                size="sm"
+                className={cn('h-9', !row.countsVehicles && 'text-muted-foreground')}
+                aria-pressed={row.countsVehicles}
+                aria-label={`${row.name} dihitung kendaraan`}
+                onClick={() =>
+                  notify(setCategoryCountsVehicles(businessId, row.id, !row.countsVehicles))
+                }
+              >
+                <CarFrontIcon />
+                <span className="hidden sm:inline">Kendaraan</span>
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"

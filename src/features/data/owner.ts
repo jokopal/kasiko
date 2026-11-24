@@ -84,6 +84,8 @@ interface ConfigRow {
   template_id: string
   dashboard: Partial<DashboardLayout>
   import_mapping: Record<string, string>
+  /** Absent before migration 0800. */
+  item_mapping?: Record<string, string>
 }
 
 export async function fetchOwnerMaster(businessId: string): Promise<OwnerMaster> {
@@ -105,6 +107,7 @@ export async function fetchOwnerMaster(businessId: string): Promise<OwnerMaster>
       templateId: configRow.template_id,
       dashboard: savedLayout(configRow.dashboard, findTemplate(configRow.template_id).dashboard),
       importMapping: configRow.import_mapping,
+      itemMapping: configRow.item_mapping ?? {},
     },
     catalogCategories: rowsOf<CatalogCategoryRow>(categories).map(toCatalogCategory),
     catalogItems: rowsOf<CatalogItemRow>(items).map(toCatalogItem),
@@ -424,4 +427,160 @@ export async function fetchLiveDays(
     p_last_day: lastDayKey,
   })
   return new Set(rows)
+}
+
+// --- Vehicles, daily summary, item sales and audit (decisions #43–#45) ------------------
+
+export interface VehicleSummary {
+  /** Days with business in the range: the divisor of "per day". */
+  days: number
+  categories: { categoryId: string; name: string; vehicles: number }[]
+}
+
+export async function fetchVehicleSummary(
+  businessId: string,
+  from: Date,
+  to: Date,
+): Promise<VehicleSummary> {
+  const rows = await rpc<
+    { category_id: string; category_name: string; vehicles: number; days: number }[]
+  >('vehicle_summary', {
+    p_business_id: businessId,
+    p_from: from.toISOString(),
+    p_to: to.toISOString(),
+  })
+  return {
+    days: rows[0]?.days ?? 0,
+    categories: rows.map((r) => ({
+      categoryId: r.category_id,
+      name: r.category_name,
+      vehicles: r.vehicles,
+    })),
+  }
+}
+
+export interface DailySummaryPoint {
+  dayKey: string
+  income: number
+  expense: number
+  vehicles: number
+  transactions: number
+}
+
+export async function fetchDailySummary(
+  businessId: string,
+  firstDayKey: string,
+  lastDayKey: string,
+): Promise<DailySummaryPoint[]> {
+  const rows = await rpc<
+    { day_key: string; income: number; expense: number; vehicles: number; transactions: number }[]
+  >('daily_summary', {
+    p_business_id: businessId,
+    p_first_day: firstDayKey,
+    p_last_day: lastDayKey,
+  })
+  return rows.map((r) => ({
+    dayKey: r.day_key,
+    income: r.income,
+    expense: r.expense,
+    vehicles: r.vehicles,
+    transactions: r.transactions,
+  }))
+}
+
+export interface ImportedItemSale {
+  firstDay: string
+  lastDay: string
+  product: string
+  catalogItemId: string | null
+  qty: number
+  amount: number
+}
+
+export async function fetchItemSales(businessId: string): Promise<ImportedItemSale[]> {
+  const rows = await allPages<{
+    first_day: string
+    last_day: string
+    product: string
+    catalog_item_id: string | null
+    qty: number
+    amount: number
+  }>((start, end) =>
+    getSupabase()
+      .from('historical_item_sales')
+      .select('first_day, last_day, product, catalog_item_id, qty, amount')
+      .eq('business_id', businessId)
+      .order('first_day')
+      .order('product')
+      .range(start, end),
+  )
+  return rows.map((r) => ({
+    firstDay: r.first_day,
+    lastDay: r.last_day,
+    product: r.product,
+    catalogItemId: r.catalog_item_id,
+    qty: r.qty,
+    amount: r.amount,
+  }))
+}
+
+export interface AuditEntry {
+  id: number
+  actorId: string | null
+  action: string
+  entity: string
+  entityId: string
+  oldData: Record<string, unknown> | null
+  newData: Record<string, unknown> | null
+  createdAt: string
+}
+
+export const AUDIT_PAGE = 100
+
+/** Newest first, `AUDIT_PAGE` at a time; `beforeId` continues an earlier page. */
+export async function fetchAuditLog(
+  businessId: string,
+  options: { from: Date; to: Date; entities?: readonly string[]; beforeId?: number },
+): Promise<AuditEntry[]> {
+  let query = getSupabase()
+    .from('audit_log')
+    .select('id, actor_id, action, entity, entity_id, old_data, new_data, created_at')
+    .eq('business_id', businessId)
+    .gte('created_at', options.from.toISOString())
+    .lt('created_at', options.to.toISOString())
+  if (options.entities && options.entities.length > 0) {
+    query = query.in('entity', [...options.entities])
+  }
+  if (options.beforeId !== undefined) query = query.lt('id', options.beforeId)
+  const rows = rowsOf<{
+    id: number
+    actor_id: string | null
+    action: string
+    entity: string
+    entity_id: string
+    old_data: Record<string, unknown> | null
+    new_data: Record<string, unknown> | null
+    created_at: string
+  }>(await query.order('id', { ascending: false }).limit(AUDIT_PAGE))
+  return rows.map((r) => ({
+    id: r.id,
+    actorId: r.actor_id,
+    action: r.action,
+    entity: r.entity,
+    entityId: r.entity_id,
+    oldData: r.old_data,
+    newData: r.new_data,
+    createdAt: r.created_at,
+  }))
+}
+
+/** user id → role, so the audit log can say "Owner" or "Kasir". */
+export async function fetchMemberRoles(businessId: string): Promise<Map<string, string>> {
+  const rows = rowsOf<{ user_id: string; role: string }>(
+    await getSupabase()
+      .from('business_members')
+      .select('user_id, role')
+      .eq('business_id', businessId),
+  )
+  return new Map(rows.map((r) => [r.user_id, r.role]))
 }

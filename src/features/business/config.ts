@@ -4,7 +4,15 @@
 // Owner-only: never cached on the cashier device.
 
 export type PanelId =
-  'trend' | 'monthly' | 'paymentMethods' | 'topItems' | 'expenseMix' | 'busyHours'
+  | 'trend'
+  | 'monthly'
+  | 'paymentMethods'
+  | 'topItems'
+  | 'expenseMix'
+  | 'busyHours'
+  | 'history'
+  | 'avgIncome'
+  | 'vehicles'
 
 export interface LayoutEntry<T extends string> {
   id: T
@@ -29,6 +37,8 @@ export interface BusinessConfig {
   dashboard: DashboardLayout
   /** Normalized spreadsheet label → expense category id, remembered between imports. */
   importMapping: Record<string, string>
+  /** Normalized Olsera product → catalog item id or 'skip' (decision #45). */
+  itemMapping: Record<string, string>
 }
 
 export const PANEL_INFO: Record<PanelId, { label: string; hint: string }> = {
@@ -38,7 +48,16 @@ export const PANEL_INFO: Record<PanelId, { label: string; hint: string }> = {
   topItems: { label: 'Layanan terlaris', hint: 'Berdasarkan nilai penjualan' },
   expenseMix: { label: 'Komposisi pengeluaran', hint: 'Per kategori dan jenis' },
   busyHours: { label: 'Jam & hari tersibuk', hint: 'Jumlah transaksi per jam' },
+  history: { label: 'Riwayat harian', hint: 'Kendaraan, pemasukan, pengeluaran, profit per hari' },
+  avgIncome: { label: 'Rata-rata pemasukan harian', hint: 'Pemasukan dibagi hari buka' },
+  vehicles: { label: 'Kendaraan per hari', hint: 'Per kategori layanan cuci' },
 }
+
+/**
+ * Panels added after a layout was saved appear hidden, except these: the daily history was
+ * asked for as part of the dashboard itself, so it shows up once without a click.
+ */
+export const NEW_PANELS_VISIBLE: readonly PanelId[] = ['history']
 
 export const PANEL_IDS = Object.keys(PANEL_INFO) as PanelId[]
 
@@ -49,6 +68,7 @@ export const PANEL_IDS = Object.keys(PANEL_INFO) as PanelId[]
 export function normalizeEntries<T extends string>(
   saved: readonly LayoutEntry<T>[],
   all: readonly T[],
+  appendVisible: readonly T[] = [],
 ): LayoutEntry<T>[] {
   const known = new Set(all)
   const seen = new Set<T>()
@@ -57,11 +77,17 @@ export function normalizeEntries<T extends string>(
     seen.add(entry.id)
     return true
   })
-  return [...kept, ...all.filter((id) => !seen.has(id)).map((id) => ({ id, visible: false }))]
+  return [
+    ...kept,
+    ...all.filter((id) => !seen.has(id)).map((id) => ({ id, visible: appendVisible.includes(id) })),
+  ]
 }
 
 export function normalizeLayout(layout: Pick<DashboardLayout, 'panels'>): DashboardLayout {
-  return { version: LAYOUT_VERSION, panels: normalizeEntries(layout.panels, PANEL_IDS) }
+  return {
+    version: LAYOUT_VERSION,
+    panels: normalizeEntries(layout.panels, PANEL_IDS, NEW_PANELS_VISIBLE),
+  }
 }
 
 /** The saved layout, or the template's when it was saved by an older version. */

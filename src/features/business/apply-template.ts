@@ -42,6 +42,7 @@ export function templateRows(
         name: group.category,
         sortOrder: nextSortOrder(catalogCategories),
         isActive: true,
+        countsVehicles: group.countsVehicles ?? true,
       }
       catalogCategories.push(category)
       added.catalogCategories.push(category)

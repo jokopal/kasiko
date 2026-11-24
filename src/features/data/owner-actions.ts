@@ -573,3 +573,70 @@ export async function setCashierActive(businessId: string, active: boolean) {
   await invalidateBusiness(businessId)
   return result
 }
+
+/** Decision #46: the stored cashier password, decrypted server side; every look is logged. */
+export async function revealCashierPassword(businessId: string): Promise<Result<string | null>> {
+  const result = await cashierCall<{ password: string | null }>({
+    action: 'reveal_password',
+    businessId,
+  })
+  return result.ok ? ok(result.value.password) : result
+}
+
+// --- Vehicles & cashier price edits (decisions #43, #44) -----------------------------------
+
+export function setCategoryCountsVehicles(businessId: string, id: string, countsVehicles: boolean) {
+  return run(businessId, () =>
+    db().from('catalog_categories').update({ counts_vehicles: countsVehicles }).eq('id', id),
+  )
+}
+
+export function setCashierCanEditPrices(businessId: string, allowed: boolean) {
+  return run(businessId, () =>
+    db().from('businesses').update({ cashier_can_edit_prices: allowed }).eq('id', businessId),
+  )
+}
+
+// --- Imported item sales (decision #45) ----------------------------------------------------
+
+export interface ItemSalesPeriod {
+  firstDay: string
+  lastDay: string
+  rows: {
+    product: string
+    productGroup: string | null
+    catalogItemId: string | null
+    qty: number
+    orders: number
+    amount: number
+  }[]
+}
+
+export function importItemSales(
+  businessId: string,
+  periods: readonly ItemSalesPeriod[],
+  mapping: Readonly<Record<string, string>>,
+): Promise<Result<{ periods: number }>> {
+  return run(
+    businessId,
+    () =>
+      db().rpc('import_item_sales', {
+        p_business_id: businessId,
+        p_source: 'olsera',
+        p_periods: periods.map((period) => ({
+          first_day: period.firstDay,
+          last_day: period.lastDay,
+          rows: period.rows.map((row) => ({
+            product: row.product,
+            product_group: row.productGroup,
+            catalog_item_id: row.catalogItemId,
+            qty: row.qty,
+            orders: row.orders,
+            amount: row.amount,
+          })),
+        })),
+        p_mapping: mapping,
+      }),
+    (data) => ({ periods: data as number }),
+  )
+}

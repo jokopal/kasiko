@@ -174,6 +174,15 @@ Nomor dipertahankan karena dirujuk di kode dan migrasi. Bila dua keputusan berte
 |---|-------|-----------|
 | 42 | Cetak langsung: USB, Bluetooth, RawBT | Melengkapi #5 untuk tablet Android. Tombol **Cetak** memakai cara yang disimpan per perangkat: **Kabel USB** (WebUSB lewat OTG, paling stabil, disarankan), **Bluetooth** (BLE via Web Bluetooth), atau **Bluetooth klasik lewat aplikasi RawBT** (intent Android; untuk printer SPP yang tidak terjangkau browser). Pengaturan printer berupa **prosedur bertahap**: pilih cara → daftar periksa + deteksi (printer USB yang sudah diizinkan, Bluetooth tablet mati/menyala) → cari/pairing → **tes cetak + konfirmasi "kertas keluar?"** dengan panduan perbaikan. Header kasir menampilkan status printer (siap / tersambung saat mencetak / kabel tidak terdeteksi / belum diatur) dan notifikasi saat kabel USB dicolok/dicabut. Cetak tanpa printer tersimpan membuka pengaturan. Pengaturan lama (v1, BLE) dipindahkan otomatis. Print browser & WhatsApp tetap. |
 
+### Keputusan tambahan (2026-11-24)
+
+| # | Topik | Keputusan |
+|---|-------|-----------|
+| 43 | Kendaraan & ringkasan harian | **Kendaraan = Σ qty layanan** di kategori katalog yang ditandai `counts_vehicles` (Cuci Mobil, Cuci Motor, Kendaraan Besar); Tambahan, Salon, dan item tanpa layanan tidak dihitung. Dashboard owner punya strip **Hari ini** (pemasukan, pengeluaran, profit, kendaraan vs kemarin) dan panel **Riwayat harian** (tampil bawaan, sekali ditambahkan ke tata letak tersimpan); panel **Rata-rata pemasukan harian** (dibagi hari buka saja) dan **Kendaraan per hari** (per kategori) tersembunyi, bisa dinyalakan lewat Sesuaikan. Kasir tidak melihat profit. Fungsi SQL `daily_summary`, `vehicle_summary`; `top_items` dikelompokkan per item id dengan nama katalog terkini. |
+| 44 | Kasir ubah harga | Owner menyalakan **"Kasir boleh ubah harga"** (`businesses.cashier_can_edit_prices`, bawaan mati). Bila menyala, kasir mendapat tombol roda gigi **Harga** untuk mengubah harga layanan aktif, **hanya online**, lewat RPC `cashier_set_item_price`. Transaksi lama tetap memakai snapshot harganya; setiap perubahan tercatat di `audit_log` dan tampil di halaman **Log Audit** owner. *Melonggarkan #2 (harga diatur owner) atas izin owner.* |
+| 45 | Laporan Olsera | Laporan Olsera "Penjualan berdasarkan SKU" (per bulan) diimpor ke `historical_item_sales` lewat `import_item_sales`, **hanya analisis** (layanan terlaris, kendaraan per hari): **tidak pernah menambah pemasukan**, karena uangnya sudah ada di impor arus kas. Produk dihubungkan ke item katalog (alias di template, pilihan diingat di `business_configs.item_mapping`) atau dilewati. Periode dipotong otomatis sehari sebelum transaksi kasir pertama (Olsera berhenti 13 Nov 2026). Hanya periode yang **seluruhnya** di dalam rentang laporan yang dihitung. File tidak pernah di-commit (#27). |
+| 46 | Kata sandi kasir & pratinjau | Owner bisa **melihat email login dan kata sandi kasir**: kata sandi disimpan terenkripsi di **Supabase Vault** saat dibuat/di-reset lewat `manage-cashier`, dibaca hanya oleh service role, dan **setiap kali dibuka tercatat** di `audit_log`. Akun lama perlu di-reset sekali agar kata sandinya bisa dilihat. Owner punya **Pratinjau Kasir**: layar kasir asli dengan katalog & warna usaha, tanpa menyimpan apa pun. Kolom kata sandi login punya tombol lihat/sembunyikan. |
+
 ---
 
 ## 6. Arsitektur & stack
@@ -248,6 +257,7 @@ scripts/          bootstrap-owner.ts, db-test.ts (rahasia dari .env.bootstrap)
 | `audit_log` | jejak perubahan & pembatalan owner | — |
 | `orders` | pesanan terbuka "bayar di akhir" (#34) | semua yang terbuka + hari ini |
 | `discounts` | preset diskon owner (#35) | yang aktif |
+| `historical_item_sales` | penjualan per produk dari laporan Olsera (#45), hanya analisis | — |
 | Storage `logos` | logo usaha di folder `<business_id>/` | baca publik, tulis owner |
 
 **Uang** selalu integer rupiah (`bigint`). **Waktu** `timestamptz`; batas hari memakai zona
@@ -269,6 +279,8 @@ Untuk periode `[from, to)`, hanya baris paid/active:
   — data impor **tidak** ikut; setor `capital` = uang baru owner, tidak mengurangi kas bebas.
   *Rumus ini turunan agent dari #8 — konfirmasi owner masih tertunda (Pertanyaan #9).*
 - Uang laci seharusnya (hari ini) = modal laci + Σ penjualan tunai − Σ pengeluaran laci (#37).
+- Kendaraan = Σ qty item paid di kategori `counts_vehicles` (+ periode Olsera yang seluruhnya di dalam rentang); per hari = kendaraan ÷ hari buka (#43).
+- Rata-rata pemasukan harian = Σ pemasukan ÷ hari dengan pemasukan > 0 (#43).
 
 ### Nomor nota
 
@@ -346,6 +358,7 @@ Legenda: ✅ selesai & teruji · 🟡 ada tetapi belum teruji penuh / belum live
 | Template impor Excel & tag (#38) | ✅ | diuji di Excel asli dan lewat `import_history` (transaksi di-rollback) dengan data asli: cocok sampai rupiah |
 | Detail transaksi owner (#39) | ✅ | diuji di browser terhadap data produksi (hanya baca) |
 | Riwayat Excel 2025–2026 di produksi | ✅ | diimpor ulang owner 2026-11-03: 637 hari (3 Jan 2025 – 30 Okt 2026) |
+| Kendaraan, ringkasan harian, kasir ubah harga, Olsera, kata sandi kasir, pratinjau kasir, Log Audit (#43–#46) | 🟡 | kode & tes selesai (Vitest, pgTAP 182 hijau dengan migrasi `0800` di transaksi rollback); migrasi `0800` dan deploy `manage-cashier` **menunggu persetujuan owner**; rapikan katalog & impor 35 laporan Olsera menunggu migrasi |
 | Operasional produksi (backup, monitoring, SMTP) | ⬜ | Pertanyaan #14 |
 
 **Ringkasnya:** fondasi dan database sudah kuat dan live, dan semua layar sudah ada — tetapi

@@ -16,6 +16,7 @@ const business: Business = {
   openingCash: 0,
   drawerFloat: 0,
   openingReserve: 0,
+  cashierCanEditPrices: false,
   isActive: true,
 }
 const device: DeviceRecord = {

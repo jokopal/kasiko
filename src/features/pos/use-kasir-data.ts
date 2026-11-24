@@ -28,6 +28,8 @@ export interface KasirData {
   /** Open orders (cars not yet paid), oldest first, including unsynced ones (decision #34). */
   openOrders: LocalRow<Order>[]
   outbox: OutboxEntry[]
+  /** Owner preview (decision #46 / AGENTS section 9): screens render, nothing is saved. */
+  preview?: boolean
 }
 
 export const KasirDataContext = createContext<KasirData | null>(null)

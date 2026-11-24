@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/password-input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { homePathFor, signInCashier, signInOwner, useAuthState } from '@/features/auth/session'
 import { isSupabaseConfigured } from '@/lib/supabase'
@@ -118,9 +119,8 @@ export function LoginPage() {
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="password">Kata sandi</FieldLabel>
-                  <Input
+                  <PasswordInput
                     id="password"
-                    type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="current-password"
