@@ -354,7 +354,7 @@ Legenda: ✅ selesai & teruji · 🟡 ada tetapi belum teruji penuh / belum live
 | Owner Manajemen: pengeluaran, cadangan, impor Excel | ✅ | ekspor pengeluaran; rumus kas bebas masih menunggu konfirmasi (#9) |
 | Owner Admin: katalog, kategori, diskon, pengaturan, template, tambah usaha, akun kasir | ✅ | akun kasir via `manage-cashier`; upload logo ke Storage |
 | Storage logo | ✅ | bucket `logos` + policy (dalam migrasi `0600`) |
-| Hosting & domain | 🟡 | Vercel (paket gratis) `kasiko-snowy.vercel.app` — proyek Vercel terhubung ke **fork** `loypandia12-cpu/kasiko` yang masih di commit lama; domain sendiri belum |
+| Hosting & domain | 🟡 | Vercel (paket gratis) `kasiko-nine.vercel.app`; kode di-push ke `main` repo `jokopal/kasiko`, lalu owner menyinkronkan ke repo yang terhubung ke Vercel; domain sendiri belum |
 | Template impor Excel & tag (#38) | ✅ | diuji di Excel asli dan lewat `import_history` (transaksi di-rollback) dengan data asli: cocok sampai rupiah |
 | Detail transaksi owner (#39) | ✅ | diuji di browser terhadap data produksi (hanya baca) |
 | Riwayat Excel 2025–2026 di produksi | ✅ | diimpor ulang owner 2026-11-03: 637 hari (3 Jan 2025 – 30 Okt 2026) |
