@@ -358,7 +358,7 @@ Legenda: ✅ selesai & teruji · 🟡 ada tetapi belum teruji penuh / belum live
 | Template impor Excel & tag (#38) | ✅ | diuji di Excel asli dan lewat `import_history` (transaksi di-rollback) dengan data asli: cocok sampai rupiah |
 | Detail transaksi owner (#39) | ✅ | diuji di browser terhadap data produksi (hanya baca) |
 | Riwayat Excel 2025–2026 di produksi | ✅ | diimpor ulang owner 2026-11-03: 637 hari (3 Jan 2025 – 30 Okt 2026) |
-| Kendaraan & Laporan Kendaraan (per kategori & per layanan), ringkasan harian, koreksi nota kasir, Olsera, kata sandi kasir, pratinjau kasir, Log Audit (#43–#46) | 🟡 | migrasi `0800`, `0900` live; `1000` (kendaraan per layanan) dan `1100` (koreksi nota) menunggu diterapkan; pgTAP 199 hijau dengan migrasi baru; `manage-cashier` ter-deploy; koreksi nota belum diuji di tablet kasir |
+| Kendaraan & Laporan Kendaraan (per kategori & per layanan), ringkasan harian, koreksi nota kasir, Olsera, kata sandi kasir, pratinjau kasir, Log Audit (#43–#46) | 🟡 | migrasi `0800`, `0900`, `1000` (kendaraan per layanan), `1100` (koreksi nota) live; pgTAP 199 hijau; `manage-cashier` ter-deploy; koreksi nota belum diuji di tablet kasir |
 | Operasional produksi (backup, monitoring, SMTP) | ⬜ | Pertanyaan #14 |
 
 **Ringkasnya:** fondasi dan database sudah kuat dan live, dan semua layar sudah ada — tetapi
